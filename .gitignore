@@ -1,0 +1,27 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+
+# Node
+node_modules/
+
+# Environment
+.env
+
+# Generated folders
+uploads/
+outputs/
+pdf_stores/
+ocr/
+
+# PDFs
+*.pdf
+
+# macOS
+.DS_Store
+
+# Misc
+*.index
+*.pkl
+summary.txt

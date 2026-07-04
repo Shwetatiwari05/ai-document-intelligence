@@ -1,0 +1,27 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+
+# Runtime folders
+uploads/
+outputs/
+pdf_stores/
+ocr/
+
+# Environment
+.env
+
+# mac
+.DS_Store
+
+# Node
+node_modules/
+
+# PDFs
+*.pdf
+
+# Generated files
+chunks.pkl
+vector_store.index
+summary.txt

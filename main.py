@@ -1,0 +1,552 @@
+"""
+main.py — FastAPI Backend for AI Document Intelligence System
+
+Connects all existing modules (core/, features/) to web endpoints.
+Run from the project root (same level as core/ and features/):
+
+    uvicorn main:app --reload
+
+Endpoints:
+    POST /upload              — upload a PDF, ingest it (returns pdf_id)
+    GET  /documents            — list all ingested PDFs
+    DELETE /documents/{pdf_id} — delete a PDF's vector store
+    POST /chat                 — ask a question about a PDF (with memory)
+    GET  /chat/history/{pdf_id} — saved chat history for a PDF
+    POST /chat/clear            — clear conversation memory + history for a session
+    POST /summarize             — summarize a PDF
+    GET  /summarize/history/{pdf_id} — saved summaries for a PDF
+    POST /redact                 — redact a PDF, returns downloadable file
+    GET  /redact/history/{pdf_id} — saved redaction runs for a PDF
+    POST /voice/transcribe        — transcribe uploaded audio (from browser mic)
+"""
+
+from fastapi import Depends
+from core.auth import get_current_user
+import os
+import shutil
+import uuid
+from datetime import datetime
+from pathlib import Path
+
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from pydantic import BaseModel
+
+# ─── EXISTING PROJECT MODULES ─────────────────────────────────────────────────
+
+from core.ingest import (
+    ingest_pdf,
+    list_pdfs,
+    load_pdf_store,
+    delete_pdf_store,
+    load_history,
+    append_history,
+    clear_history,
+    load_metadata,
+    get_or_create_thumbnail,
+)
+from core.rag_engine import generate_answer, ConversationMemory
+from features.summarizer import summarize_plain_text
+from features.redactor import redact_pdf
+from core.db import (
+    insert_document,
+    get_documents,
+    delete_document_db,
+    get_document,
+)
+
+
+# ─── APP SETUP ─────────────────────────────────────────────────────────────────
+
+app = FastAPI(title="AI Document Intelligence API")
+
+# Allow frontend (React, running on a different port) to call this API
+app.add_middleware(
+    CORSMiddleware,    
+    allow_origins=["*"],          # tighten this to your frontend URL in production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+UPLOAD_DIR = Path("uploads")
+OUTPUT_DIR = Path("outputs")
+UPLOAD_DIR.mkdir(exist_ok=True)
+OUTPUT_DIR.mkdir(exist_ok=True)
+
+
+# ─── IN-MEMORY SESSION STORE (conversation memory per chat session) ───────────
+# Key: session_id (sent by frontend) → ConversationMemory instance
+# NOTE: This resets if the server restarts. Once you add a database,
+#       you can persist chat history there instead.
+
+chat_sessions: dict[str, ConversationMemory] = {}
+
+
+def get_or_create_memory(session_id: str) -> ConversationMemory:
+    if session_id not in chat_sessions:
+        chat_sessions[session_id] = ConversationMemory(max_exchanges=12)
+    return chat_sessions[session_id]
+
+
+# ─── REQUEST/RESPONSE MODELS ───────────────────────────────────────────────────
+
+class ChatRequest(BaseModel):
+    pdf_id: str
+    query: str
+    session_id: str  # frontend generates a UUID per chat session
+
+
+class ChatResponse(BaseModel):
+    answer: str
+    sources: list  # list of {"page_num", "page_range", "text"} for citations later
+
+
+class SummarizeRequest(BaseModel):
+    pdf_id: str | None = None
+    text: str | None = None
+
+
+class RedactRequest(BaseModel):
+    pdf_id: str
+    redact_types: list[str] = []
+    custom_terms: list[str] = []
+
+
+class ClearMemoryRequest(BaseModel):
+    session_id: str
+
+
+# ─── 1. UPLOAD & INGEST ────────────────────────────────────────────────────────
+
+@app.post("/upload")
+async def upload_pdf(
+    file: UploadFile = File(...),
+    force_ocr: bool = Form(False),
+    used_for: str = Form("chat"),
+    current_user = Depends(get_current_user)
+):
+    """
+    Upload a PDF — saves it, then ingests it into its own vector store.
+    Frontend should show a loading state while this runs (can take a while
+    for large/scanned PDFs).
+
+    "used_for" records which page the upload came from (chat/summarize/
+    redact) so the dashboard can show what this document was used for.
+    """
+    
+    if not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(400, "Only PDF files are supported.")
+
+    # Each upload gets its own subfolder (named with a random ID) so that
+    # uploading two different files with the same name (e.g. "resume.pdf"
+    # twice) never overwrites an earlier upload. The original filename is
+    # kept as-is inside that folder so /redact can find it later using the
+    # "saved_path" we store in metadata below.
+    
+    unique_dir = UPLOAD_DIR / uuid.uuid4().hex
+    unique_dir.mkdir(parents=True, exist_ok=True)
+    save_path = unique_dir / file.filename
+
+    with open(save_path, "wb") as f:
+        shutil.copyfileobj(file.file, f)
+
+    try:
+        metadata = ingest_pdf(
+            str(save_path),
+            current_user.id,
+            force_ocr=force_ocr,
+            used_for=used_for
+        )
+
+        existing = get_document(metadata["pdf_id"], current_user.id)
+        print("EXISTING =", existing)
+
+        if existing is None:
+            response = insert_document(metadata, current_user.id)
+            print("INSERT RESPONSE =", response)
+
+    except Exception as e:
+        print("DB ERROR =", repr(e))
+        raise
+    
+    return {
+    "status": "success",
+    "document": metadata
+}
+
+
+# ─── 2. LIST / DELETE DOCUMENTS ────────────────────────────────────────────────
+
+@app.get("/documents")
+async def get_documents_route(
+    current_user=Depends(get_current_user)
+):
+    print("=" * 50)
+    print("EMAIL:", current_user.email)
+    print("USER ID:", current_user.id)
+    print("=" * 50)
+
+    docs = get_documents(current_user.id)
+
+    print("Returned docs:", len(docs))
+
+    return {
+        "documents": docs
+    }
+
+
+@app.delete("/documents/{pdf_id}")
+async def delete_document(
+    pdf_id: str,
+    current_user=Depends(get_current_user)
+):
+
+    delete_pdf_store(current_user.id,pdf_id)
+
+    delete_document_db(
+        pdf_id,
+        current_user.id
+    )
+
+    return {
+        "status": "deleted",
+        "pdf_id": pdf_id
+    }
+
+
+@app.get("/documents/{pdf_id}/thumbnail")
+async def get_document_thumbnail(
+    pdf_id: str,
+    current_user = Depends(get_current_user)
+):
+
+    print("PDF ID =", pdf_id)
+
+    thumb_path = get_or_create_thumbnail(current_user.id,pdf_id)
+
+    print("Thumbnail =", thumb_path)
+
+    if not thumb_path:
+        raise HTTPException(404, "No thumbnail available")
+
+    return FileResponse(
+        thumb_path,
+        media_type="image/png",
+    )
+
+
+@app.get("/documents/{pdf_id}/file")
+async def get_document_file(
+    pdf_id: str,
+    current_user=Depends(get_current_user)
+):
+
+    meta = load_metadata(current_user.id, pdf_id)
+
+    if not meta:
+        raise HTTPException(404, "Document not found")
+
+    source_path = meta["source_path"]
+
+    if not Path(source_path).exists():
+        raise HTTPException(404, "Original PDF not found")
+
+    return FileResponse(
+        source_path,
+        media_type="application/pdf",
+        filename=meta["pdf_name"],
+        content_disposition_type="inline",
+    )
+
+
+# ─── 3. CHAT (RAG with memory) ─────────────────────────────────────────────────
+@app.post("/chat")
+async def chat(
+    req: ChatRequest,
+    current_user=Depends(get_current_user)
+):
+    """
+    Ask a question about a specific PDF.
+    `session_id` lets the same conversation remember earlier turns —
+    generate a new UUID on the frontend each time the user starts a fresh chat.
+    """
+    try:
+        from core.db import get_document
+        doc = get_document(req.pdf_id, current_user.id)
+        if not doc:
+            raise HTTPException(404, "Document not found")
+        index, chunks, meta = load_pdf_store(current_user.id,req.pdf_id)
+    except FileNotFoundError:
+        raise HTTPException(404, f"No document found with id: {req.pdf_id}")
+
+    memory = get_or_create_memory(req.session_id)
+
+    try:
+        answer, results = generate_answer(req.query, chunks, index, memory)
+    except Exception as e:
+        raise HTTPException(500, f"Answer generation failed: {e}")
+
+    sources = [
+        {
+            "page_num": r.get("page_num"),
+            "page_range": r.get("page_range"),
+            "text": r["text"][:300],
+        }
+        for r in results
+    ]
+
+    # Persist this exchange so it's still here the next time this document
+    # is opened — even in a new tab, or after a server restart.
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+    append_history(
+        current_user.id,
+        req.pdf_id,
+        "chat",
+        {
+            "role": "user",
+            "content": req.query,
+            "at": timestamp
+        }
+    )
+
+    append_history(
+        current_user.id,
+        req.pdf_id,
+        "chat",
+        {
+            "role": "assistant",
+            "content": answer,
+            "sources": sources,
+            "at": timestamp
+        }
+    )
+
+    return ChatResponse(answer=answer, sources=sources)
+
+
+@app.get("/chat/history/{pdf_id}")
+async def get_chat_history(
+    pdf_id: str,
+    current_user=Depends(get_current_user)
+):
+    doc = get_document(pdf_id, current_user.id)
+    if not doc:
+        raise HTTPException(404, "Document not found")
+    return {
+        "messages": load_history(current_user.id,pdf_id,"chat")
+    }
+
+
+@app.post("/chat/clear")
+async def clear_chat(req: ClearMemoryRequest,current_user=Depends(get_current_user)):
+    """
+    Clear conversation memory for a session AND its saved history.
+    The frontend sends the document's pdf_id as session_id, so this wipes
+    both the short-term LLM memory and the persisted chat log for that doc.
+    """
+    doc = get_document(req.session_id, current_user.id)
+    if not doc:
+        raise HTTPException(404, "Document not found")
+    if req.session_id in chat_sessions:
+        chat_sessions[req.session_id].clear()
+    clear_history(current_user.id,req.session_id,"chat")
+    return {"status": "cleared"}
+
+
+# ─── 4. SUMMARIZE ───────────────────────────────────────────────────────────────
+@app.post("/summarize")
+async def summarize(
+    req: SummarizeRequest,
+    current_user=Depends(get_current_user)
+):
+    """
+    Summarize either an already-ingested PDF (pass pdf_id)
+    or raw pasted text (pass text).
+    """
+
+    from core.db import get_document
+
+    if req.pdf_id:
+        # Check that this PDF belongs to the logged-in user
+        doc = get_document(req.pdf_id, current_user.id)
+
+        if not doc:
+            raise HTTPException(404, "Document not found")
+
+        try:
+            _, chunks, meta = load_pdf_store(current_user.id,req.pdf_id)
+        except FileNotFoundError:
+            raise HTTPException(
+                404,
+                f"No document found with id: {req.pdf_id}"
+            )
+
+        full_text = " ".join(c["text"] for c in chunks)
+
+    elif req.text and req.text.strip():
+        full_text = req.text
+
+    else:
+        raise HTTPException(
+            400,
+            "Provide either pdf_id or text to summarize"
+        )
+
+    try:
+        summary = summarize_plain_text(full_text)
+    except Exception as e:
+        raise HTTPException(
+            500,
+            f"Summarization failed: {e}"
+        )
+
+    if req.pdf_id:
+        append_history(
+            current_user.id,
+            req.pdf_id,
+            "summarize",
+            {
+                "summary": summary,
+                "at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+            },
+        )
+
+    return {
+        "pdf_id": req.pdf_id,
+        "summary": summary,
+    }
+
+
+@app.get("/summarize/history/{pdf_id}")
+async def get_summarize_history(
+    pdf_id: str,
+    current_user=Depends(get_current_user),
+):
+    from core.db import get_document
+
+    doc = get_document(pdf_id, current_user.id)
+
+    if not doc:
+        raise HTTPException(404, "Document not found")
+
+    return {
+        "history": load_history(current_user.id,pdf_id,"summarize")
+    }
+
+
+# ─── 5. REDACT ──────────────────────────────────────────────────────────────────
+@app.post("/redact")
+async def redact(
+    req: RedactRequest,
+    current_user=Depends(get_current_user)
+):
+    from core.db import get_document
+
+    # Check ownership
+    doc = get_document(req.pdf_id, current_user.id)
+
+    if not doc:
+        raise HTTPException(404, "Document not found")
+
+    original_path = Path(doc["source_path"])
+
+    if not original_path.exists():
+        raise HTTPException(404, "Original PDF file not found on server.")
+
+    output_filename = f"redacted_{req.pdf_id}_{uuid.uuid4().hex[:8]}.pdf"
+    output_path = OUTPUT_DIR / output_filename
+
+    try:
+        redact_pdf(
+            input_path=str(original_path),
+            output_path=str(output_path),
+            redact_types=req.redact_types,
+            custom_terms=req.custom_terms,
+        )
+    except Exception as e:
+        raise HTTPException(500, f"Redaction failed: {e}")
+
+    download_url = f"/redact/download/{output_filename}"
+
+    append_history(
+        current_user.id,
+        req.pdf_id,
+        "redact",
+        {
+            "redact_types": req.redact_types,
+            "custom_terms": req.custom_terms,
+            "download_url": download_url,
+            "at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+        },
+    )
+
+    return {
+        "status": "success",
+        "download_url": download_url,
+    }
+
+@app.get("/redact/history/{pdf_id}")
+async def get_redact_history(
+    pdf_id: str,
+    current_user=Depends(get_current_user)
+):
+    from core.db import get_document
+
+    doc = get_document(pdf_id, current_user.id)
+
+    if not doc:
+        raise HTTPException(404, "Document not found")
+
+    return {
+        "history": load_history(current_user.id,pdf_id,"redact")
+    }
+
+
+@app.get("/redact/download/{filename}")
+async def download_redacted(filename: str):
+    """Download endpoint for the redacted PDF produced above."""
+    file_path = OUTPUT_DIR / filename
+    if not file_path.exists():
+        raise HTTPException(404, "File not found.")
+    return FileResponse(file_path, filename=filename, media_type="application/pdf")
+
+
+# ─── 6. VOICE TRANSCRIPTION ─────────────────────────────────────────────────────
+
+@app.post("/voice/transcribe")
+async def transcribe_voice(
+    file: UploadFile = File(...),
+    current_user=Depends(get_current_user)
+):
+    """
+    Transcribe an audio file recorded in the browser (e.g. webm/wav from
+    the mic icon in the frontend) into text.
+    """
+
+    from features.voice_handler import transcribe
+
+    original_suffix = Path(file.filename or "").suffix or ".webm"
+    temp_path = UPLOAD_DIR / f"{uuid.uuid4().hex}{original_suffix}"
+
+    with open(temp_path, "wb") as f:
+        shutil.copyfileobj(file.file, f)
+
+    try:
+        text = transcribe(str(temp_path), language="en")
+    except Exception as e:
+        raise HTTPException(500, f"Transcription failed: {e}")
+    finally:
+        if temp_path.exists():
+            os.remove(temp_path)
+
+    return {"text": text}
+# ─── HEALTH CHECK ───────────────────────────────────────────────────────────────
+
+@app.get("/")
+async def root():
+    return {"status": "ok", "message": "AI Document Intelligence API is running"}
+
+

@@ -1,0 +1,254 @@
+@import "tailwindcss";
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap");
+
+@theme {
+  /* Color tokens */
+  --color-canvas: #fafafd;
+  --color-surface: #ffffff;
+  --color-surface-sunken: #f7f6fb;
+
+  --color-ink-900: #1b1830;
+  --color-ink-800: #252150;
+  --color-ink-700: #2c2754;
+
+  --color-accent-700: #443c98;
+  --color-accent-600: #534ab7;
+  --color-accent-500: #7f77dd;
+  --color-accent-100: #eeedfe;
+  --color-accent-50: #f4f3fe;
+
+  --color-text-primary: #1b1830;
+  --color-text-secondary: #6f6b92;
+  --color-text-on-dark: #ffffff;
+  --color-text-on-dark-muted: #b5b1d4;
+
+  --color-border-soft: #e4e1f2;
+  --color-border-dark: #3a3568;
+
+  --color-coral: #d85a30;
+  --color-coral-bg: #faece7;
+  --color-teal: #0f6e56;
+  --color-teal-bg: #e1f5ee;
+
+  --color-danger: #c0392b;
+  --color-danger-bg: #fbe9e7;
+
+  /* Type tokens */
+  --font-display: "Fraunces", Georgia, serif;
+  --font-sans: "Inter", -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+
+  /* Radius */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 22px;
+}
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    zoom: 1.0;
+  }
+
+  body {
+    background-color: var(--color-canvas);
+    color: var(--color-text-primary);
+    font-family: var(--font-sans);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-accent-600);
+    outline-offset: 2px;
+  }
+}
+
+@layer utilities {
+  .font-display {
+    font-family: var(--font-display);
+  }
+
+  .font-mono {
+    font-family: var(--font-mono);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@keyframes scan-sweep {
+  0% {
+    transform: translateY(0);
+    opacity: 0;
+  }
+  8% {
+    opacity: 1;
+  }
+  92% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(230px);
+    opacity: 0;
+  }
+}
+
+@keyframes pulse-soft {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.12);
+    opacity: 0.85;
+  }
+}
+
+@keyframes bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes float-slow {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-8deg);
+  }
+  50% {
+    transform: translateY(-8px) rotate(-4deg);
+  }
+}
+
+@keyframes float-slow-delayed {
+  0%,
+  100% {
+    transform: translateY(0) rotate(10deg);
+  }
+  50% {
+    transform: translateY(-8px) rotate(6deg);
+  }
+}
+
+.animate-pulse-soft {
+  animation: pulse-soft 3.2s ease-in-out infinite;
+}
+
+.animate-bob {
+  animation: bob 3.6s ease-in-out infinite;
+}
+
+.animate-float-slow {
+  animation: float-slow 4.2s ease-in-out infinite;
+}
+
+.animate-float-slow-delayed {
+  animation: float-slow-delayed 4.8s ease-in-out infinite 0.6s;
+}
+/* ── AskPDF landing styles ───────────────────────────── */
+
+.landing-bg {
+  background: linear-gradient(
+    135deg,
+    #f0eeff 0%,
+    #f7f4ff 20%,
+    #faf8ff 45%,
+    #f5f0ff 65%,
+    #ede8ff 85%,
+    #e8e0ff 100%
+  );
+}
+
+.blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(72px);
+  pointer-events: none;
+}
+
+.blob-1 {
+  width: 520px; height: 520px;
+  top: -180px; left: -160px;
+  background: radial-gradient(circle, #c4b5fd 0%, #a78bfa 40%, transparent 70%);
+  opacity: 0.28;
+  animation: drift1 14s ease-in-out infinite;
+}
+
+.blob-2 {
+  width: 440px; height: 440px;
+  top: 120px; right: -140px;
+  background: radial-gradient(circle, #fca5a5 0%, #f9a8d4 50%, transparent 70%);
+  opacity: 0.20;
+  animation: drift2 17s ease-in-out infinite 2s;
+}
+
+.blob-3 {
+  width: 400px; height: 400px;
+  bottom: -120px; left: 25%;
+  background: radial-gradient(circle, #6ee7b7 0%, #67e8f9 50%, transparent 70%);
+  opacity: 0.16;
+  animation: drift1 20s ease-in-out infinite 1s;
+}
+
+.blob-4 {
+  width: 300px; height: 300px;
+  top: 40%; left: 42%;
+  background: radial-gradient(circle, #c084fc 0%, #e879f9 50%, transparent 70%);
+  opacity: 0.12;
+  animation: drift2 12s ease-in-out infinite 3s;
+}
+
+@keyframes drift1 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(20px, -30px) scale(1.04); }
+  66% { transform: translate(-15px, 20px) scale(0.97); }
+}
+
+@keyframes drift2 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(-25px, 15px) scale(1.05); }
+  66% { transform: translate(18px, -22px) scale(0.96); }
+}
+
+.gradient-text {
+  background: linear-gradient(135deg, var(--color-accent-600) 0%, #9333ea 50%, #ec4899 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.step-card {
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+/* new float animation for 3rd mini doc */
+@keyframes float-medium {
+  0%, 100% { transform: translateY(0) rotate(-5deg); }
+  50% { transform: translateY(-12px) rotate(-2deg); }
+}
+
+.animate-float-medium {
+  animation: float-medium 5.5s ease-in-out infinite 1.2s;
+}
+
+/* color-accent-300 and color-accent-400 for logo */
+:root {
+  --color-accent-300: #a5a0e8;
+  --color-accent-400: #8f89df;
+}
