@@ -1,24 +1,30 @@
 from sentence_transformers import SentenceTransformer
 import numpy as np
 
-# Load embedding model
-model = SentenceTransformer("BAAI/bge-small-en-v1.5")   
+_model = None
+
+def get_model():
+    global _model
+
+    if _model is None:
+        print("Loading embedding model...")
+        _model = SentenceTransformer("BAAI/bge-small-en-v1.5")
+
+    return _model
+
 
 def generate_embeddings(chunks):
-    """
-    Convert text chunks into semantic embeddings.
-    """
 
-    texts = []
+    model = get_model()
 
-    # Preparing texts for embedding by adding a prefix to provide context to the model that these are passages to be represented for search
-    for chunk in chunks:
-        texts.append("passage: " + chunk["text"]) 
+    texts = [
+        "passage: " + chunk["text"]
+        for chunk in chunks
+    ]
 
-    # Generate embeddings with normalization for better cosine similarity performance
     embeddings = model.encode(
         texts,
-        normalize_embeddings=True, 
+        normalize_embeddings=True,
         show_progress_bar=True
     )
 

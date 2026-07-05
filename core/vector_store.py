@@ -1,3 +1,4 @@
+from core.embedder import get_model
 import faiss
 import numpy as np
 import pickle
@@ -56,12 +57,14 @@ def load_vector_store(
     return index, chunks
 
 # Perform semantic search by generating an embedding for the query and finding the most similar chunks in the vector store based on cosine similarity of embeddings
-def search(query, index, chunks, model, top_k=5):  
+def search(query, index, chunks, top_k=5): 
 
     # Generate query embedding
+    model = get_model()
+
     query_embedding = model.encode(
-    [f"Represent this sentence for searching relevant passages: {query}"], 
-    normalize_embeddings=True
+        [f"Represent this sentence for searching relevant passages: {query}"],
+        normalize_embeddings=True
 )
     # Convert to float32
     query_embedding = np.array(
@@ -92,10 +95,22 @@ def search(query, index, chunks, model, top_k=5):
     return results
 
 # Load the reranker model to perform relevance-based reranking of the search results
-reranker = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
+_reranker = None
+
+def get_reranker():
+    global _reranker
+
+    if _reranker is None:
+        print("Loading reranker...")
+        _reranker = CrossEncoder(
+            "cross-encoder/ms-marco-MiniLM-L-6-v2"
+        )
+
+    return _reranker
 
 def rerank(query, results, top_k=3):
     # Create pairs of query and chunk text for reranking
+    reranker = get_reranker()
     pairs = [[query, result["text"]] for result in results]
     
     # Get relevance scores from the reranker model

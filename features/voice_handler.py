@@ -27,9 +27,21 @@ from faster_whisper import WhisperModel
 
 MODEL_SIZE = os.getenv("WHISPER_MODEL", "tiny")
 
-print(f"Loading Whisper '{MODEL_SIZE}' model (first run downloads, cached after)...")
-whisper_model = WhisperModel(MODEL_SIZE, device="cpu", compute_type="int8")
-print("Whisper ready!")
+_whisper_model = None
+
+def get_whisper_model():
+    global _whisper_model
+
+    if _whisper_model is None:
+        print("Loading Whisper...")
+        _whisper_model = WhisperModel(
+            MODEL_SIZE,
+            device="cpu",
+            compute_type="int8"
+        )
+        print("Whisper ready!")
+
+    return _whisper_model
 
 
 # AUDIO RECORDING ─────────────────────────────────────────────────────────
@@ -112,9 +124,12 @@ def record_until_silence(
 
 def transcribe(audio_path: str, language: str = "en") -> str:
     """Transcribe audio file to text using faster-whisper."""
+
+    model = get_whisper_model()
+
     print("Transcribing...")
 
-    segments, info = whisper_model.transcribe(
+    segments, info = model.transcribe(
         audio_path,
         language=language,
         beam_size=5
@@ -122,11 +137,10 @@ def transcribe(audio_path: str, language: str = "en") -> str:
 
     text = " ".join(segment.text.strip() for segment in segments).strip()
 
-    # Cleanup temp file
     if os.path.exists(audio_path):
         os.remove(audio_path)
 
-    print(f"You said: \"{text}\"")
+    print(f'You said: "{text}"')
     return text
 
 
