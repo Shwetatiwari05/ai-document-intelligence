@@ -2,7 +2,6 @@ from core.embedder import get_model
 import faiss
 import numpy as np
 import pickle
-from sentence_transformers import CrossEncoder
 
 
 def create_vector_store(embeddings):
@@ -102,6 +101,9 @@ def get_reranker():
 
     if _reranker is None:
         print("Loading reranker...")
+
+        from sentence_transformers import CrossEncoder
+
         _reranker = CrossEncoder(
             "cross-encoder/ms-marco-MiniLM-L-6-v2"
         )

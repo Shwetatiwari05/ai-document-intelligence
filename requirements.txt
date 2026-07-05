@@ -1,6 +1,7 @@
 # =========================================================
 # Web Framework
 # =========================================================
+--extra-index-url https://download.pytorch.org/whl/cpu
 fastapi
 uvicorn[standard]
 python-multipart
@@ -51,5 +52,5 @@ scipy
 # ML
 # =========================================================
 numpy
-torch
-torchvision
+torch==2.7.1
+torchvision==0.22.1

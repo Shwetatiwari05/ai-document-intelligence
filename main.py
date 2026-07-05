@@ -80,8 +80,8 @@ print("12")
 #     load_metadata,
 #     get_or_create_thumbnail,
 # )
-print("Loading rag")
-from core.rag_engine import generate_answer, ConversationMemory
+# print("Loading rag")
+# from core.rag_engine import generate_answer, ConversationMemory
 
 # print("Loading summarizer")
 # from features.summarizer import summarize_plain_text
@@ -311,6 +311,7 @@ async def chat(
     req: ChatRequest,
     current_user=Depends(get_current_user)
 ):
+    from core.rag_engine import generate_answer
     from core.ingest import (
     load_pdf_store,
     append_history,

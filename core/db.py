@@ -1,6 +1,5 @@
 from core.supabase_client import supabase
 
-
 def insert_document(metadata, user_id):
     return (
         supabase.table("documents")
