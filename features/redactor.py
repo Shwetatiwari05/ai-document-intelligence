@@ -25,15 +25,20 @@ load_dotenv()
 
 _gliner_model = None
 
+_gliner_model = None
+
 def get_gliner():
     global _gliner_model
+
     if _gliner_model is None:
-        try:
-            from gliner import GLiNER
-            _gliner_model = GLiNER.from_pretrained("urchade/gliner_medium-v2.1")
-            print("GLiNER loaded.")
-        except Exception as e:
-            print(f"[WARN] GLiNER not available: {e}. Address/name NER disabled.")
+        print("Loading GLiNER...")
+
+        from gliner import GLiNER
+
+        _gliner_model = GLiNER.from_pretrained(
+            "urchade/gliner_medium-v2.1"
+        )
+
     return _gliner_model
 
 # GLiNER entity labels we care about
@@ -180,7 +185,7 @@ _easyocr_reader = None
 def get_easyocr_reader():
     global _easyocr_reader
     if _easyocr_reader is None:
-        import easyocr
+        # import easyocr
         _easyocr_reader = easyocr.Reader(['en'], gpu=False)
     return _easyocr_reader
 

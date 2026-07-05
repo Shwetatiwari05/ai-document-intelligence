@@ -19,36 +19,77 @@ Endpoints:
     GET  /redact/history/{pdf_id} — saved redaction runs for a PDF
     POST /voice/transcribe        — transcribe uploaded audio (from browser mic)
 """
-
+print("1")
 from fastapi import Depends
+
+print("2")
 from core.auth import get_current_user
+
+print("3")
 import os
+
+print("4")
 import shutil
+
+print("5")
 import uuid
+
+print("6")
 from datetime import datetime
+
+print("7")
 from pathlib import Path
 
+print("8")
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+
+print("9")
 from fastapi.middleware.cors import CORSMiddleware
+
+print("10")
 from fastapi.responses import FileResponse
+
+print("11")
 from pydantic import BaseModel
 
-# ─── EXISTING PROJECT MODULES ─────────────────────────────────────────────────
+print("12")
 
-from core.ingest import (
-    ingest_pdf,
-    list_pdfs,
-    load_pdf_store,
-    delete_pdf_store,
-    load_history,
-    append_history,
-    clear_history,
-    load_metadata,
-    get_or_create_thumbnail,
-)
+# from fastapi import Depends
+# from core.auth import get_current_user
+# import os
+# import shutil
+# import uuid
+# from datetime import datetime
+# from pathlib import Path
+
+# from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+# from fastapi.middleware.cors import CORSMiddleware
+# from fastapi.responses import FileResponse
+# from pydantic import BaseModel
+
+# ─── EXISTING PROJECT MODULES ─────────────────────────────────────────────────
+# print("Loading ingest")
+# from core.ingest import (
+#     ingest_pdf,
+#     list_pdfs,
+#     load_pdf_store,
+#     delete_pdf_store,
+#     load_history,
+#     append_history,
+#     clear_history,
+#     load_metadata,
+#     get_or_create_thumbnail,
+# )
+print("Loading rag")
 from core.rag_engine import generate_answer, ConversationMemory
-from features.summarizer import summarize_plain_text
-from features.redactor import redact_pdf
+
+# print("Loading summarizer")
+# from features.summarizer import summarize_plain_text
+
+# print("Loading redactor")
+# from features.redactor import redact_pdf
+
+print("Loading db")
 from core.db import (
     insert_document,
     get_documents,
@@ -127,6 +168,7 @@ async def upload_pdf(
     used_for: str = Form("chat"),
     current_user = Depends(get_current_user)
 ):
+    from core.ingest import ingest_pdf
     """
     Upload a PDF — saves it, then ingests it into its own vector store.
     Frontend should show a loading state while this runs (can take a while
@@ -202,6 +244,7 @@ async def delete_document(
     pdf_id: str,
     current_user=Depends(get_current_user)
 ):
+    from core.ingest import delete_pdf_store
 
     delete_pdf_store(current_user.id,pdf_id)
 
@@ -221,6 +264,7 @@ async def get_document_thumbnail(
     pdf_id: str,
     current_user = Depends(get_current_user)
 ):
+    from core.ingest import get_or_create_thumbnail
 
     print("PDF ID =", pdf_id)
 
@@ -242,7 +286,7 @@ async def get_document_file(
     pdf_id: str,
     current_user=Depends(get_current_user)
 ):
-
+    from core.ingest import load_metadata
     meta = load_metadata(current_user.id, pdf_id)
 
     if not meta:
@@ -267,6 +311,10 @@ async def chat(
     req: ChatRequest,
     current_user=Depends(get_current_user)
 ):
+    from core.ingest import (
+    load_pdf_store,
+    append_history,
+)
     """
     Ask a question about a specific PDF.
     `session_id` lets the same conversation remember earlier turns —
@@ -332,6 +380,7 @@ async def get_chat_history(
     pdf_id: str,
     current_user=Depends(get_current_user)
 ):
+    from core.ingest import load_history
     doc = get_document(pdf_id, current_user.id)
     if not doc:
         raise HTTPException(404, "Document not found")
@@ -342,6 +391,7 @@ async def get_chat_history(
 
 @app.post("/chat/clear")
 async def clear_chat(req: ClearMemoryRequest,current_user=Depends(get_current_user)):
+    from core.ingest import clear_history
     """
     Clear conversation memory for a session AND its saved history.
     The frontend sends the document's pdf_id as session_id, so this wipes
@@ -362,10 +412,15 @@ async def summarize(
     req: SummarizeRequest,
     current_user=Depends(get_current_user)
 ):
+    from core.ingest import (
+    load_pdf_store,
+    append_history,
+)
     """
     Summarize either an already-ingested PDF (pass pdf_id)
     or raw pasted text (pass text).
     """
+    from features.summarizer import summarize_plain_text
 
     from core.db import get_document
 
@@ -425,6 +480,7 @@ async def get_summarize_history(
     pdf_id: str,
     current_user=Depends(get_current_user),
 ):
+    from core.ingest import load_history
     from core.db import get_document
 
     doc = get_document(pdf_id, current_user.id)
@@ -440,9 +496,13 @@ async def get_summarize_history(
 # ─── 5. REDACT ──────────────────────────────────────────────────────────────────
 @app.post("/redact")
 async def redact(
+
     req: RedactRequest,
     current_user=Depends(get_current_user)
 ):
+    
+    from features.redactor import redact_pdf
+    from core.ingest import append_history
     from core.db import get_document
 
     # Check ownership
@@ -493,6 +553,7 @@ async def get_redact_history(
     pdf_id: str,
     current_user=Depends(get_current_user)
 ):
+    from core.ingest import load_history
     from core.db import get_document
 
     doc = get_document(pdf_id, current_user.id)
