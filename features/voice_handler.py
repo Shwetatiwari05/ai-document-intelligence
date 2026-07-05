@@ -21,7 +21,6 @@ import scipy.io.wavfile as wav
 import numpy as np
 import tempfile
 import os
-from faster_whisper import WhisperModel
 
 # ─── LOAD FASTER-WHISPER MODEL ────────────────────────────────────────────────
 
@@ -34,11 +33,14 @@ def get_whisper_model():
 
     if _whisper_model is None:
         print("Loading Whisper...")
+        from faster_whisper import WhisperModel
+
         _whisper_model = WhisperModel(
             MODEL_SIZE,
             device="cpu",
             compute_type="int8"
         )
+
         print("Whisper ready!")
 
     return _whisper_model
