@@ -19,6 +19,11 @@ Endpoints:
     GET  /redact/history/{pdf_id} — saved redaction runs for a PDF
     POST /voice/transcribe        — transcribe uploaded audio (from browser mic)
 """
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from core.rag_engine import ConversationMemory
+    
 print("1")
 from fastapi import Depends
 
@@ -122,12 +127,14 @@ OUTPUT_DIR.mkdir(exist_ok=True)
 # NOTE: This resets if the server restarts. Once you add a database,
 #       you can persist chat history there instead.
 
-chat_sessions: dict[str, ConversationMemory] = {}
+chat_sessions: dict[str, "ConversationMemory"] = {}
 
+def get_or_create_memory(session_id: str):
+    from core.rag_engine import ConversationMemory
 
-def get_or_create_memory(session_id: str) -> ConversationMemory:
     if session_id not in chat_sessions:
         chat_sessions[session_id] = ConversationMemory(max_exchanges=12)
+
     return chat_sessions[session_id]
 
 
