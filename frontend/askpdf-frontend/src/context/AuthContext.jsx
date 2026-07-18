@@ -105,10 +105,15 @@ async function signOut() {
     return true;
   }
 
-  async function requestPasswordReset(_email) {
-    // TODO: replace with supabase.auth.resetPasswordForEmail(email)
-    return true;
-  }
+  async function requestPasswordReset(email) {
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${window.location.origin}/reset-password`,
+  });
+
+  if (error) throw error;
+
+  return true;
+}
 
   const value = {
     user,
