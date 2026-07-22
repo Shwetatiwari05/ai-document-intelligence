@@ -54,9 +54,15 @@ def extract_text_ocr(pdf_path: str, **kwargs) -> str:
 
     print(f"Sending to Mistral OCR...")
 
-    # Read PDF as base64
+    file_size = os.path.getsize(pdf_path)
+
+    if file_size > 20 * 1024 * 1024:
+        raise ValueError(
+            "PDF too large for OCR processing. Upload PDF smaller than 20MB."
+        )
+
     with open(pdf_path, "rb") as f:
-        pdf_data = base64.standard_b64encode(f.read()).decode("utf-8")
+        pdf_data = base64.b64encode(f.read()).decode("utf-8")
 
     # Call Mistral OCR API
     response = client.ocr.process(

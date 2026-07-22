@@ -11,7 +11,7 @@ def insert_document(metadata, user_id):
             "chunk_count": metadata["chunk_count"],
             "word_count": metadata["word_count"],
             "force_ocr": metadata.get("force_ocr", False),
-            "source_path": metadata["source_path"],
+            "source_path": None,
             "storage_path": metadata.get("storage_path"),
         })
         .execute()

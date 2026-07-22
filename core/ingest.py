@@ -160,6 +160,7 @@ def ingest_pdf(
     user_id: str,
     force_ocr: bool = False,
     used_for: str = "chat",
+    storage_path: str = None
 ) -> dict:
     """
     Ingest a PDF into its own isolated vector store under the given user.
@@ -254,6 +255,7 @@ def ingest_pdf(
         "ingested_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
         "store_path" : str(store_path),
         "source_path": str(pdf_path),
+        "storage_path": storage_path
     }
     save_metadata(user_id, pdf_id, metadata)
 

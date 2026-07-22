@@ -203,13 +203,13 @@ async def upload_pdf(
 
     with open(save_path, "wb") as f:
         shutil.copyfileobj(file.file, f)
+
     storage_path = f"{current_user.id}/{uuid.uuid4().hex}_{file.filename}"
 
-    supabase.storage \
-        .from_("pdfs") \
-        .upload(
+    with open(save_path, "rb") as f:
+        supabase.storage.from_("pdfs").upload(
             storage_path,
-            str(save_path)
+            f
         )
 
     try:
@@ -217,7 +217,8 @@ async def upload_pdf(
             str(save_path),
             current_user.id,
             force_ocr=force_ocr,
-            used_for=used_for
+            used_for=used_for,
+            storage_path=storage_path
         )
 
         existing = get_document(metadata["pdf_id"], current_user.id)
@@ -310,7 +311,7 @@ async def get_document_file(
     if not meta:
         raise HTTPException(404, "Document not found")
 
-    source_path = meta["source_path"]
+    data = supabase.storage.from_("pdfs").download(storage_path)
 
     if not Path(source_path).exists():
         raise HTTPException(404, "Original PDF not found")
