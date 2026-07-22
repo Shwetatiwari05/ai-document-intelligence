@@ -21,6 +21,7 @@ Endpoints:
 """
 from typing import TYPE_CHECKING
 from core.supabase_client import supabase
+from fastapi.responses import Response
 
 if TYPE_CHECKING:
     from core.rag_engine import ConversationMemory
@@ -53,7 +54,7 @@ print("9")
 from fastapi.middleware.cors import CORSMiddleware
 
 print("10")
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 
 print("11")
 from pydantic import BaseModel
@@ -306,21 +307,36 @@ async def get_document_file(
     current_user=Depends(get_current_user)
 ):
     from core.ingest import load_metadata
+
     meta = load_metadata(current_user.id, pdf_id)
 
     if not meta:
         raise HTTPException(404, "Document not found")
 
-    data = supabase.storage.from_("pdfs").download(storage_path)
+    storage_path = meta.get("storage_path")
 
-    if not Path(source_path).exists():
-        raise HTTPException(404, "Original PDF not found")
+    if not storage_path:
+        raise HTTPException(404, "Storage path missing")
 
-    return FileResponse(
-        source_path,
+    try:
+        data = (
+            supabase.storage
+            .from_("pdfs")
+            .download(storage_path)
+        )
+
+    except Exception as e:
+        raise HTTPException(
+            404,
+            f"PDF not found in storage: {e}"
+        )
+
+    return Response(
+        content=data,
         media_type="application/pdf",
-        filename=meta["pdf_name"],
-        content_disposition_type="inline",
+        headers={
+            "Content-Disposition": f'inline; filename="{meta["pdf_name"]}"'
+        }
     )
 
 

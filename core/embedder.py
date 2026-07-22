@@ -53,6 +53,20 @@ def get_model():
 
     return _model
 
+def get_model():
+    global _model
+
+    if _model is None:
+        print("BEFORE MODEL LOAD")
+
+        _model = SentenceTransformer(
+            "sentence-transformers/all-MiniLM-L6-v2",
+            device="cpu"
+        )
+
+        print("AFTER MODEL LOAD")
+
+    return _model
 
 def generate_embeddings(chunks):
     model = get_model()
