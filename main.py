@@ -20,6 +20,7 @@ Endpoints:
     POST /voice/transcribe        — transcribe uploaded audio (from browser mic)
 """
 from typing import TYPE_CHECKING
+from core.supabase_client import supabase
 
 if TYPE_CHECKING:
     from core.rag_engine import ConversationMemory
@@ -202,7 +203,6 @@ async def upload_pdf(
 
     with open(save_path, "wb") as f:
         shutil.copyfileobj(file.file, f)
-        
     storage_path = f"{current_user.id}/{uuid.uuid4().hex}_{file.filename}"
 
     supabase.storage \
