@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from core.rag_engine import ConversationMemory
-    
+
 print("1")
 from fastapi import Depends
 
@@ -109,13 +109,15 @@ app = FastAPI(title="AI Document Intelligence API")
 
 # Allow frontend (React, running on a different port) to call this API
 app.add_middleware(
-    CORSMiddleware,    
-    allow_origins=["*"],          # tighten this to your frontend URL in production
+    CORSMiddleware,
+    allow_origins=[
+        "https://ai-document-intelligence-mu.vercel.app",
+        "http://localhost:3000"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 UPLOAD_DIR = Path("uploads")
 OUTPUT_DIR = Path("outputs")
 UPLOAD_DIR.mkdir(exist_ok=True)
@@ -200,6 +202,15 @@ async def upload_pdf(
 
     with open(save_path, "wb") as f:
         shutil.copyfileobj(file.file, f)
+        
+    storage_path = f"{current_user.id}/{uuid.uuid4().hex}_{file.filename}"
+
+    supabase.storage \
+        .from_("pdfs") \
+        .upload(
+            storage_path,
+            str(save_path)
+        )
 
     try:
         metadata = ingest_pdf(
