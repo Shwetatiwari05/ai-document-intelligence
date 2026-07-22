@@ -4,6 +4,7 @@ import { AuthProvider } from "./context/AuthContext";
 import { DocumentProvider } from "./context/DocumentContext";
 import ProtectedRoute from "./components/layout/ProtectedRoute";
 
+import ResetPassword from "./pages/ResetPassword";
 import Landing from "./pages/Landing";
 import Signup from "./pages/Signup";
 import Login from "./pages/Login";
@@ -68,6 +69,8 @@ export default function App() {
                 </ProtectedRoute>
               }
             />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             <Route
               path="/change-password"
               element={
