@@ -8,7 +8,7 @@ TWO PATHS:
 WHAT GETS REDACTED:
   email, phone, money, date, aadhaar, pan, credit_card, ifsc,
   address (street + city + state + country + pincode)
-  via regex + GLiNER NER (ORG/LOC/GPE/ADDRESS/COUNTRY/STATE)
+  via regex + keyword dictionaries
 """
 
 import os, re, warnings
@@ -18,47 +18,6 @@ from dotenv import load_dotenv
 
 warnings.filterwarnings("ignore")
 load_dotenv()
-
-# ── GLiNER (replaces spaCy for address/location detection) ───────────────────
-# pip install gliner
-# Model: urchade/gliner_medium-v2.1  (good balance speed/accuracy)
-
-_gliner_model = None
-
-_gliner_model = None
-
-def get_gliner():
-    global _gliner_model
-
-    if _gliner_model is None:
-        print("Loading GLiNER...")
-
-        from gliner import GLiNER
-
-        _gliner_model = GLiNER.from_pretrained(
-            "urchade/gliner_medium-v2.1"
-        )
-
-    return _gliner_model
-
-# GLiNER entity labels we care about
-GLINER_LABELS = [
-    "person name",
-    "organization",
-    "street address",
-    "city",
-    "state",
-    "country",
-    "location",
-    "postal code",
-]
-
-# Which redact_types map to which GLiNER labels
-GLINER_TYPE_MAP = {
-    "address": ["street address", "city", "state", "country", "location", "postal code"],
-    "name":    ["person name"],
-    "org":     ["organization"],
-}
 
 # ── REGEX PATTERNS ────────────────────────────────────────────────────────────
 PATTERNS = {
@@ -76,52 +35,38 @@ PATTERNS = {
     "address":r"(?i)\b(?:suite|apt|apartment|flat|floor|unit|plot|house|room|no\.?)\s+[\w\-]+|\b\d+[A-Za-z]?\s+[\w\s]{2,30}(?:street|st|avenue|ave|road|rd|lane|ln|drive|dr|blvd|boulevard|way|court|ct|place|pl|nagar|marg|colony|sector)\b",
 }
 ADDRESS_KEYWORDS = {
+    # Structural address words
     'COLONY','MARG','ROAD','LANE','NAGAR','WEST','EAST','NORTH','SOUTH',
     'SECTOR','BLOCK','STREET','PLOT','FLAT','HOUSE','APARTMENT','APT',
     'BUILDING','BLDG','NEAR','OPP','LAYOUT','PHASE','CROSS','MAIN','PARK',
-    'SOCIETY','COMPLEX','TOWER','MUMBAI','DELHI','THANE','PUNE','ANDHERI',
-    'BORIVALI','KURLA','MAHARASHTRA','GUJARAT','RAJASTHAN','KARNATAKA',
-    'TAMILNADU','KERALA','TELANGANA','ANDHRA','PRADESH','UTTARAKHAND',
-    'PUNJAB','HARYANA','BENGAL','ODISHA','BIHAR','KANJURMARG','BHANDUP',
-    'CHEMBUR','WADALA','DADAR','GOREGAON','MALAD','KANDIVALI','VASAI',
-    'VIRAR','MIRA','BHAYANDER','DAHISAR','MULUND','SUBURBAN',
-    'STATE','DISTRICT','SUBDISTRICT','TALUKA','TEHSIL','VILLAGE','PO','VTC',
-    # Countries / international
-    'INDIA','USA','UK','ENGLAND','AUSTRALIA','CANADA','GERMANY','FRANCE',
-    'CHINA','JAPAN','SINGAPORE','DUBAI','UAE','LONDON','ESSEX','BERKSHIRE',
-    'DORSET','BOOLE','ILFORD','READING','BERKS','SAPORS',
+    'SOCIETY','COMPLEX','TOWER','VTC','CINEMA','EXTENSION',
+    # Address labels
+    'STATE','DISTRICT','SUBDISTRICT','TALUKA','TEHSIL','VILLAGE','PO',
+    'SUB DIVISION','SUBDIVISION',
+    # Indian cities / towns
+    'MUMBAI','DELHI','THANE','PUNE','ANDHERI','BORIVALI','KURLA','NAGPUR',
+    'NASHIK','AURANGABAD','KALYAN','DOMBIVLI','VASAI','VIRAR','VASHI',
+    'CHEMBUR','DADAR','GOREGAON','MALAD','KANDIVALI','MIRA','BHAYANDER',
+    'DAHISAR','MULUND','ULHASNAGAR','KANJURMARG','BHANDUP','WADALA',
+    'AHMEDABAD','SURAT','RAJKOT','VADODARA','JAIPUR','JODHPUR',
+    'UDAIPUR','KOTA','LUCKNOW','KANPUR','AGRA','VARANASI','PATNA','GAYA',
+    'BHUBANESWAR','CUTTACK','PURI','RANCHI','JAMSHEDPUR','GUWAHATI',
+    'SHILLONG','AGARTALA','IMPHAL','KOHIMA','AIZAWL','ITANAGAR','PANAJI',
+    'BENGALURU','BANGALORE','MYSORE','MANGALORE','HUBLI','CHENNAI',
+    'COIMBATORE','MADURAI','TRICHY','SALEM','VELLORE','ERODE',
+    'HYDERABAD','VIJAYAWADA','GUNTUR','VISAKHAPATNAM','TIRUPATI',
+    'KOLKATA','HOWRAH','DURGAPUR','SILIGURI',
+    # Indian states / UTs
+    'MAHARASHTRA','GUJARAT','RAJASTHAN','KARNATAKA','TAMILNADU','KERALA',
+    'TELANGANA','ANDHRA','MADHYA PRADESH','UTTARAKHAND','PUNJAB','HARYANA',
+    'UTTAR PRADESH','BIHAR','ODISHA','JHARKHAND','CHHATTISGARH',
+    'HIMACHAL','JAMMU','KASHMIR','LADAKH','ANDAMAN','CHANDIGARH',
+    # International countries / cities
+    'INDIA','USA','UK','ENGLAND','SCOTLAND','WALES','AUSTRALIA','CANADA',
+    'GERMANY','FRANCE','CHINA','JAPAN','SINGAPORE','DUBAI','UAE','LONDON',
+    'CALIFORNIA','TEXAS','FLORIDA','NEW YORK',
 }
 
-LOCATION_FALLBACK_MAP = {
-    "mumbai, india", "delhi, india", "bangalore, india", "pune, india",
-    "chennai, india", "kolkata, india", "hyderabad, india", "ahmedabad, india",
-    "mumbai, maharashtra", "pune, maharashtra", "nagpur, maharashtra",
-    "bangalore, karnataka", "chennai, tamilnadu", "hyderabad, telangana",
-    "california, usa", "texas, usa", "new york, usa", "london, uk",
-    "england, uk", "scotland, uk", "wales, uk",
-    "maharashtra, india", "karnataka, india", "tamilnadu, india",
-    "gujarat, india", "rajasthan, india", "punjab, india",
-    "delhi, india", "mumbai, maharashtra, india",
-    "bangalore, karnataka, india", "pune, maharashtra, india",
-}
-
-LOCATION_COMBINATION_PATTERNS = [
-    re.compile(
-        r'\b(Ahmedabad|Bangalore|Bengluru|Chennai|Delhi|Hyderabad|Kolkata|Mumbai|Pune|Nagpur|Jaipur|Lucknow|Patna|Surat|Kanpur|Indore|Thane|Bhopal|Visakhapatnam|Vijayawada|Coimbatore|Kochi|Kozhikode|Kannur|Kollam|Trivandrum|Madurai|Tiruchirappalli|Salem|Vijayawada|Guntur|Rajahmundry|Gurgaon|Faridabad|Noida|Ghaziabad|Navi\s+Mumbai|Thane|Kalyan|Dombivli|Vasai|Virar|Vashi|Airoli|Sanpada|Juhu|Andheri|Bandra|Borivali|Kurla|Chembur|Dadar|Goregaon|Malad|Kandivali|Vasai|Viva|Worli|Sion|Prabhadevi|Dahisar|Mira|Bhayander|Ulhasnagar|Ambarnath|Badlapur|Karjat|Pen|Alibag|Ratnagiri|Sindhudurg|Satara|Sangli|Kolhapur|Solapur|Aurangabad|Nanded|Latur|Osmanabad|Beed|Parbhani|Hingoli|Washim|Yavatmal|Gadchiroli| Chandrapur|Wardha|Nagpur|Bhandara|Gondia|Buldhana|Akola|Amravati|Yavatmal|Washim|Hingoli|Nanded|Latur|Osmanabad|Beed|Parbhani|Aurangabad|Jalna|Ahmadnagar|Pune|Satara|Sangli|Kolhapur|Solapur|Ahmednagar|Dhule|Jalgaon|Nandurbar|Malegaon|Nashik|Sinnar|Igatpuri|Trimbak|Chandwad|Yeola|Niphad|Suleman|Baglan|Malegaon|Nandgaon|Chandur|Bhadgaon|Erandol|Dharangaon|Amalner|Chopda|Shahada| Shirpur|Sindkheda| Kusumba|Sakri|Dondaicha|Nizar|Songadh|Valod|Vyara|Mahal|Dediapada|Jagadia|Ankleshwar|Rajpipla|Karjan|Padra|Dabhoi|Savli|Waghodia|Vadodara|Dabhoi|Desar|Vaghodia|Savli|Karjan|Padra|Ankleshwar|Jagadia|Rajpipla|Dediapada|Mahal|Valod|Vyara|Songadh|Nizar|Shirpur|Sindkheda|Kusumba|Sakri|Dondaicha|Nandgaon|Chandur|Bhadgaon|Erandol|Dharangaon|Amalner|Chopda|Shahada| Malegaon|Nashik|Sinnar|Igatpuri|Trimbak|Chandwad|Yeola|Niphad|Suleman|Baglan|Nandurbar|Dhule|Jalgaon|Ahmadnagar|Pune|Satara|Sangli|Kolhapur|Solapur|Aurangabad|Nanded|Latur|Osmanabad|Beed|Parbhani|Hingoli|Washim|Yavatmal|Gadchiroli|Chandrapur|Wardha|Nagpur|Bhandara|Gondia|Buldhana|Akola|Amravati|Gondia|Bhandara|Nagpur|Wardha|Chandrapur|Gadchiroli|Yavatmal|Washim|Hingoli|Parbhani|Nanded|Latur|Osmanabad|Beed|Aurangabad|Jalna|Ahmadnagar|Pune|Satara|Sangli|Kolhapur|Solapur|Ahmednagar|Dhule|Jalgaon|Nandurbar|Malegaon|Nashik|Sinnar|Igatpuri|Trimbak|Chandwad|Yeola|Niphad|Suleman|Baglan|Malegaon|Nandgaon|Chandur|Bhadgaon|Erandol|Dharangaon|Amalner|Chopda|Shahada|Shirpur|Sindkheda|Kusumba|Sakri|Dondaicha|Nizar|Songadh|Valod|Vyara|Mahal|Dediapada|Jagadia|Ankleshwar|Rajpipla|Karjan|Padra|Dabhoi|Savli|Waghodia|Vadodara|Dabhoi|Desar|Vaghodia|Savli|Karjan|Padra|Ankleshwar|Jagadia|Rajpipla|Dediapada|Mahal|Valod|Vyara|Songadh|Nizar|Shirpur|Sindkheda|Kusumba|Sakri|Dondaicha|Nandgaon|Chandur|Bhadgaon|Erandol|Dharangaon|Amalner|Chopda|Shahada)(?:,[\s]*)(?:India|Maharashtra|Karnataka|Tamilnadu|Kerala|Telangana|Andhra|Gujarat|Rajasthan|Punjab|Haryana|Uttarakhand|Bihar|Odisha|Jharkhand|Chhattisgarh|Uttar\s+Pradesh|Delhi|Goa|Mizoram|Nagaland|Manipur|Tripura|Meghalaya|Arunachal|Pradesh|Sikkim|Assam|West\s+Bengal|Madhya\s+Pradesh|Himachal|Jammu|Kashmir|Ladakh|Andaman|Nicobar|Chandigarh|Puducherry|Dadra|Nagar\s+Haveli|Daman|Diu|Lakshadweep)\b'
-    ),
-    re.compile(
-        r'\b(Los\s+Angeles|San\s+Francisco|New\s+York|Chicago|Houston|Phoenix|Philadelphia|San\s+Antonio|San\s+Diego|Dallas|San\ Jose|Austin|Jacksonville|Fort\s+Worth|Columbus|Charlotte|San\s+Francisco|Indianapolis|San\s+Jose|Seattle|Denver|Washington|Boston|El\s+Paso|Detroit|Nashville|Portland|Memphis|Oklahoma\s+City|Las\s+Vegas|Louisville|Baltimore|Milwaukee|Albuquerque|Tucson|Fresno|Sacramento|Mesa|Atlanta|Kansas\s+City|Colorado\s+Springs|Raleigh|Omaha|Miami|Oakland|Minneapolis|Tulsa|Cleveland|Wichita|Arlington|New\s+Orleans|Bakersfield|Tampa|Honolulu|Aurora|Anaheim|Santa\s+Ana|St\.\s+Louis|Riverside|Corpus\s+Christi|Lexington|Stockton|Cincinnati|St\.\s+Paul|Pittsburgh|St\s+Louis|Greensboro|Lincoln|Plano|Orlando|Irvine|Newark|Toledo|Durham|Chula\s+Vista|Fort\s+Wayne|Jersey\s+City|St\.\s+Petersburg|Laredo|Madison|Chandler|Buffalo|Lubbock|Scottsdale|Reno|Glendale|Gilbert|Winston-Salem|Chesapeake|North\s+Las\s+Vegas|Norfolk|Fremont|Garland|Irving|Hialeah|Richmond|Boise|San\s+Bernardino|Birmingham|Spokane|Modesto|Fontana|Santa\s+Clarita|Oakland|Bakersfield|Fremont|Glendale|San\s+Bernardino|Modesto|Fontana|Santa\s+Clarita|Oxnard|Moreno\s+Valley|Huntington\s+Beach|Salt\s+Lake\s+City|Gresham|Portland|Warren|McKinney|McAllen|Frisco|Pearland|Denton|Carrollton|Surprise|Roseville|Garden\s+Grove|Kansas\s+City|Lakewood|Panorama\s+City|Escondido|Naperville|Joliet|Rockford|Springfield|Pomona|Rialto|Inglewood|Torrance|Oceanside|Garden\s+Grove|Huntington\s+Beach|Fontana|Lancaster|Mckinney|Mesquite|Grand\s+Prairie|Waco|Denton|Carrollton|Surprise|Roseville|Garden\s+Grove|Kansas\s+City|Lakewood|Panorama\s+City|Escondido|Naperville|Joliet|Rockford|Springfield|Pomona|Rialto|Inglewood|Torrance|Oceanside)(?:,[\s]*)(?:CA|TX|FL|NY|PA|IL|OH|GA|NC|MI|NJ|VA|IN|WA|AZ|MA|TN|MO|MD|WI|MN|CO|AL|SC|LA|KY|OR|OK|CT|UT|IA|NV|AR|MS|KS|NM|NE|WV|ID|HI|NH|ME|MT|RI|DE|SD|ND|AK|VT|WY|United\s+States|USA)\b'
-    ),
-    re.compile(
-        r'\b(London|Manchester|Birmingham|Leeds|Glasgow|Liverpool|Newcastle|Sheffield|Bristol|Edinburgh|Cardiff|Belfast|Nottingham|Southampton|Portsmouth|Leicester|Coventry|Bradford|Cardiff|Swansea|Reading|Brighton|Milton\s+Keynes|Aberdeen|Plymouth|Stoke-on-Trent|Salford|Wolverhampton|York|Hull|Oxford|Cambridge|Ipswich|Swindon|Luton|Norwich|Middlesbrough|Stockton-on-Tees|Watford|Southend|Slough|Hove|Eastbourne|Exeter|Cheltenham|Cambridge|Peterborough|Gloucester|Bournemouth|Poole|Basildon|Colchester|Crawley|Gillingham|Worthing|Croydon|Bromley|Bexley|Harrow|Ealing|Enfield|Walthamstow|Ilford|Barking|Dagenham|Romford|Hornchurch|Upton|Upminster|Chigwell|Loughton|Waltham\s+Abbey|Cheshunt|Hoddesdon|Ware|Hertford|Stevenage|Bishop|St\.\s+Albans|Hemel\s+Hempstead|Milton\s+Keynes|Aylesbury|High\s+Wycombe|Reading|Bracknell|Maidenhead|Windsor|Slough|Guildford|Woking|Epsom|Ewell|Reigate|Redhill|Crawley|Horsham|Chichester|Bognor|Littlehampton|Worthing|Shoreham|Hove|Eastbourne|Hastings|Bexhill|Tunbridge\s+Wells|Tonbridge|Maidstone|Canterbury|Dover|Folkestone|Margate|Broadstairs|Ramsgate|Ashford|Faversham|Sittingbourne|Maidstone|Tonbridge|Tunbridge\s+Wells|Crawley|Horsham|Chichester|Bognor|Littlehampton|Worthing|Shoreham|Hove|Eastbourne|Hastings|Bexhill|Lewes|Newhaven|Seaford|Brighton|Hove|Worthing|Littlehampton|Bognor|Chichester|Horsham|Crawley|Reigate|Redhill|Guildford|Woking|Epsom|Ewell|Kingston|Surbiton|Twickenham|Richmond|Teddington|Hampton|Feltham|Staines|Egham|Chertsey|Weybridge|Walton|Esher|Hinchley|Claygate|Guildford|Farnham|Godalming|Haslemere|Petersfield|Havant|Portsmouth|Southampton|Eastleigh|Winchester|Andover|Basingstoke|Farnborough|Aldershot|Guildford|Woking|Epsom|Ewell|Redhill|Reigate|Crawley|Horsham|Chichester|Bognor|Littlehampton|Worthing|Shoreham|Hove|Eastbourne|Hastings|Bexhill)(?:,\s*)(?:England|Scotland|Wales|Northern\s+Ireland|UK)\b'
-    ),
-    re.compile(
-        r'\b(Mumbai|Delhi|Bangalore|Bengluru|Chennai|Kolkata|Hyderabad|Pune|Ahmedabad|Surat|Jaipur|Lucknow|Kanpur|Nagpur|Indore|Thane|Bhopal|Visakhapatnam|Vijayawada|Coimbatore|Kochi|Trivandrum|Madurai|Tiruchchirappalli|Salem|Gurgaon|Faridabad|Noida|Ghaziabad)(?:,\s*)(?:India)\b'
-    ),
-    re.compile(
-        r'\b(California|Texas|Florida|New\s+York|Pennsylvania|Illinois|Ohio|Georgia|North\s+Carolina|Michigan|New\s+Jersey|Virginia|Indiana|Washington|Arizona|Massachusetts|Tennessee|Missouri|Maryland|Wisconsin|Minnesota|Colorado|Alabama|South\s+Carolina|Louisiana|Kentucky|Oregon|Oklahoma|Connecticut|Utah|Iowa|Nevada|Arkansas|Mississippi|Kansas|New\s+Mexico|Nebraska|West\s+Virginia|Idaho|Hawaii|New\s+Hampshire|Maine|Montana|Rhode\s+Island|Delaware|South\s+Dakota|North\s+Dakota|Alaska|Vermont|Wyoming)(?:,\s*)(?:USA|United\s+States|CA|TX|FL|NY|PA|IL|OH|GA|NC|MI|NJ|VA|IN|WA|AZ|MA|TN|MO|MD|WI|MN|CO|AL|SC|LA|KY|OR|OK|CT|UT|IA|NV|AR|MS|KS|NM|NE|WV|ID|HI|NH|ME|MT|RI|DE|SD|ND|AK|VT|WY)\b'
-    ),
-]
 
 # ── PAGE TYPE DETECTION ───────────────────────────────────────────────────────
 
@@ -172,75 +117,23 @@ def collect_sensitive_strings(text: str, redact_types: list, custom_terms: list)
             for m in re.finditer(PATTERNS[rtype], text, re.IGNORECASE):
                 found.append(m.group(0).strip())
 
-        # GLiNER NER for address, name, org
-        if rtype in GLINER_TYPE_MAP:
-            model = get_gliner()
-            if model:
-                target_labels = GLINER_TYPE_MAP[rtype]
-                try:
-                    # GLiNER works best on shorter chunks
-                    chunks = [text[i:i+400] for i in range(0, len(text), 380)]
-                    for chunk in chunks:
-                        entities = model.predict_entities(chunk, target_labels, threshold=0.5)
-                        for ent in entities:
-                            found.append(ent["text"].strip())
-                except Exception as e:
-                    print(f"  [GLiNER error] {e}")
-
-        # Keyword fallback for address (when GLiNER not available)
-        if rtype == "address" and get_gliner() is None:
+        # Keyword-based address/location detection
+        if rtype == "address":
             for line in text.splitlines():
                 line = line.strip()
-                if line and is_address_line(line):
+                if not line:
+                    continue
+                if is_address_line(line):
                     found.append(line)
+                for word in line.upper().split():
+                    clean_word = re.sub(r'[^A-Za-z]', '', word)
+                    if clean_word in ADDRESS_KEYWORDS:
+                        found.append(clean_word)
+                        break
 
     for term in (custom_terms or []):
         if term.strip():
             found.append(term.strip())
-
-    # Fallback location detection for standalone city/state/country
-    if "address" in (redact_types or []):
-        seen_loc = set()
-        loc_spans = []
-
-        # A) Exact known combination phrases via regex
-        for pat in LOCATION_COMBINATION_PATTERNS:
-            for m in pat.finditer(text):
-                span = m.group(0).strip()
-                if span and span.lower() not in seen_loc:
-                    seen_loc.add(span.lower())
-                    loc_spans.append(span)
-
-        # B) Normalized token-pair fallback (catches "Mumbai India" without comma)
-        text_lower = text.lower()
-        tokens = tokenize(text)
-        for i in range(len(tokens)):
-            for j in range(i + 1, min(i + 5, len(tokens))):
-                combo = f"{tokens[i]}, {tokens[j]}"
-                if combo not in LOCATION_FALLBACK_MAP:
-                    continue
-                start = text_lower.find(tokens[i])
-                if start == -1:
-                    continue
-                mid = text_lower.find(tokens[j], start + len(tokens[i]))
-                if mid == -1:
-                    continue
-                end = mid + len(tokens[j])
-                span = text[start:end].strip(" ,")
-                if span and span.lower() not in seen_loc:
-                    seen_loc.add(span.lower())
-                    loc_spans.append(span)
-
-        # C) Prefer longest span, remove overlaps
-        loc_spans.sort(key=len, reverse=True)
-        final_locs = []
-        for span in loc_spans:
-            sl = span.lower()
-            if any(sl in existing.lower() or existing.lower() in sl for existing in final_locs):
-                continue
-            final_locs.append(span)
-
-        found.extend(final_locs)
 
     # Deduplicate exact matches only
     seen, result = set(), []
@@ -405,75 +298,23 @@ def redact_image_page(page: fitz.Page, page_num: int,
         print(f"  [WARN] No words detected on page {page_num+1}")
         return
 
-    sorted_words = sorted(easy_words, key=lambda w: (w["bbox"][1], w["bbox"][0]))
-    lines = []
-    current_line = [sorted_words[0]]
-    current_y = sorted_words[0]["bbox"][1]
-    y_tolerance = 8
-    for word in sorted_words[1:]:
-        y = word["bbox"][1]
-        if abs(y - current_y) <= y_tolerance:
-            current_line.append(word)
-        else:
-            lines.append(current_line)
-            current_line = [word]
-            current_y = y
-    lines.append(current_line)
-
-    for line in lines:
-        line.sort(key=lambda w: w["bbox"][0])
+    ocr_text = "\n".join(w["text"] for w in easy_words)
+    sensitives = collect_sensitive_strings(ocr_text, redact_types, custom_terms)
+    print(f"  Words: {len(easy_words)} | Sensitives: {len(sensitives)}")
 
     applied = []
 
-    for line in lines:
-        line_text = ""
-        word_spans = []
-        for w in line:
-            start = len(line_text)
-            line_text += w["text"]
-            end = len(line_text)
-            word_spans.append((start, end, w))
-            line_text += " "
-
-        sensitives = collect_sensitive_strings(line_text, redact_types, custom_terms)
-
-        for phrase in sensitives:
-            phrase = phrase.strip()
-            if not phrase:
-                continue
-
-            phrase_lower = phrase.lower()
-            line_lower = line_text.lower()
-            start = line_lower.find(phrase_lower)
-            if start == -1:
-                continue
-            end = start + len(phrase)
-
-            hit_words = [
-                w for (s, e, w) in word_spans
-                if s < end and e > start
-            ]
-            if not hit_words:
-                continue
-
-            xs0, ys0, xs1, ys1 = [], [], [], []
-            for w in hit_words:
-                x0, y0, x1, y1 = w["bbox"]
-                xs0.append(x0); ys0.append(y0)
-                xs1.append(x1); ys1.append(y1)
-
-            rect = fitz.Rect(
-                min(xs0) - 2, min(ys0) - 2,
-                max(xs1) + 2, max(ys1) + 2
-            )
-
+    for phrase in sensitives:
+        rects = phrase_rects_from_easyocr(phrase, easy_words)
+        for rect in rects:
             if any(abs(r.x0-rect.x0) < 3 and abs(r.y0-rect.y0) < 3 for r in applied):
                 continue
-
             page.add_redact_annot(rect, fill=(0, 0, 0))
             applied.append(rect)
             audit_log.append({"page": page_num+1, "type": "easyocr", "text": phrase})
             print(f"  ✓ [easyocr] {phrase[:60]}")
+        if not rects:
+            print(f"  ~ [no match] {phrase[:50]}")
 
     page.apply_redactions()
 
