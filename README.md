@@ -380,14 +380,20 @@ The retrieved context is passed to Groq LLM to generate a context-aware answer.
 > Add screenshots of:
 >
 > * Home Page
-> * <img width="1145" height="785" alt="Screenshot 2026-07-23 at 11 03 33 PM" src="https://github.com/user-attachments/assets/b43c6abc-14c9-467f-bde2-eadb7061503e" />
+<img width="1145" height="785" alt="Screenshot 2026-07-23 at 11 03 33 PM" src="https://github.com/user-attachments/assets/b43c6abc-14c9-467f-bde2-eadb7061503e" />
 
 > * Dashboard
-> * PDF Chat
+<img width="1447" height="824" alt="Screenshot 2026-07-23 at 11 06 49 PM" src="https://github.com/user-attachments/assets/d5f45c0b-2946-46c2-9b9a-e85f0d1cdb37" />
+
+> * Q&A
+
 > * AI Summary
 > * AI Redaction
+<img width="1470" height="827" alt="Screenshot 2026-07-23 at 11 09 22 PM" src="https://github.com/user-attachments/assets/a412bfa0-c7fb-4749-9efa-90726441c393" />
+<img width="1470" height="836" alt="Screenshot 2026-07-23 at 11 10 33 PM" src="https://github.com/user-attachments/assets/f6ac9af7-8003-4935-8b28-9f669fc5454b" />
+
 > * Voice Search
-> * OCR Processing
+
 
 ---
 
