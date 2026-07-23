@@ -13,6 +13,7 @@ def insert_document(metadata, user_id):
             "force_ocr": metadata.get("force_ocr", False),
             "source_path": None,
             "storage_path": metadata.get("storage_path"),
+            "used_for": metadata.get("used_for", "chat"),
         })
         .execute()
     )
