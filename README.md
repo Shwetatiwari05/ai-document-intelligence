@@ -380,6 +380,8 @@ The retrieved context is passed to Groq LLM to generate a context-aware answer.
 > Add screenshots of:
 >
 > * Home Page
+> * <img width="1145" height="785" alt="Screenshot 2026-07-23 at 11 03 33 PM" src="https://github.com/user-attachments/assets/b43c6abc-14c9-467f-bde2-eadb7061503e" />
+
 > * Dashboard
 > * PDF Chat
 > * AI Summary
