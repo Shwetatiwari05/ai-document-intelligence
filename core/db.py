@@ -13,7 +13,18 @@ def insert_document(metadata, user_id):
             "force_ocr": metadata.get("force_ocr", False),
             "source_path": None,
             "storage_path": metadata.get("storage_path"),
+            "used_for": metadata.get("used_for", "chat"),
         })
+        .execute()
+    )
+
+
+def update_document_used_for(pdf_id, user_id, used_for):
+    return (
+        supabase.table("documents")
+        .update({"used_for": used_for})
+        .eq("pdf_id", pdf_id)
+        .eq("user_id", user_id)
         .execute()
     )
 
