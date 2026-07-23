@@ -35,6 +35,8 @@ from core.ocr_extractor import extract_text_smart, is_scanned_pdf
 from core.preprocess import clean_text, chunk_text
 from core.embedder import generate_embeddings
 from core.vector_store import create_vector_store, save_vector_store, load_vector_store
+from core.db import get_document
+from core.supabase_client import supabase
 
 # ── STORE ROOT ────────────────────────────────────────────────────────────────
 
@@ -60,6 +62,69 @@ def get_pdf_id(pdf_path: str) -> str:
 
 def get_store_path(user_id: str, pdf_id: str) -> Path:
     return STORES_DIR / user_id / pdf_id
+
+
+def recover_document_from_storage(user_id: str, pdf_id: str) -> bool:
+    """
+    Download a PDF from Supabase Storage and re-ingest it to rebuild
+    missing local artifacts (vector store, metadata, thumbnail).
+
+    Returns True on success, False on failure.
+    """
+    store_path = get_store_path(user_id, pdf_id)
+
+    if (store_path / "vector_store.index").exists():
+        print(f"[Recovery] Vector store already exists for {pdf_id}, skipping.")
+        return True
+
+    print(f"[Recovery] Starting recovery for pdf_id={pdf_id}, user_id={user_id}")
+
+    doc = get_document(pdf_id, user_id)
+    if not doc:
+        print(f"[Recovery] Document not found in DB.")
+        return False
+
+    storage_path = doc.get("storage_path")
+    if not storage_path:
+        print(f"[Recovery] No storage_path found in DB record.")
+        return False
+
+    pdf_name = doc.get("pdf_name", f"{pdf_id}.pdf")
+
+    print(f"[Recovery] Downloading PDF from Supabase Storage: {storage_path}")
+    try:
+        pdf_data = supabase.storage.from_("pdfs").download(storage_path)
+    except Exception as e:
+        print(f"[Recovery] Download failed: {e}")
+        return False
+
+    temp_dir = Path("temp_recovery")
+    temp_dir.mkdir(exist_ok=True)
+    temp_path = temp_dir / pdf_name
+
+    try:
+        with open(temp_path, "wb") as f:
+            f.write(pdf_data)
+        print(f"[Recovery] Saved temporary PDF: {temp_path}")
+
+        metadata = ingest_pdf(
+            str(temp_path),
+            user_id,
+            force_ocr=doc.get("force_ocr", False),
+            used_for=doc.get("used_for", "chat"),
+            storage_path=storage_path,
+        )
+        print(f"[Recovery] Rebuilt vector store successfully for {pdf_id}")
+        return True
+
+    except Exception as e:
+        print(f"[Recovery] Rebuild failed: {e}")
+        return False
+
+    finally:
+        if temp_path.exists():
+            os.remove(temp_path)
+            print(f"[Recovery] Cleaned up temporary PDF")
 
 
 # ── THUMBNAIL ─────────────────────────────────────────────────────────────────
@@ -88,17 +153,14 @@ def get_or_create_thumbnail(user_id: str, pdf_id: str) -> Path | None:
     Return the thumbnail path, generating it on the fly if missing.
     Returns None when the source PDF is no longer accessible.
     """
-    store_path = STORES_DIR / user_id / pdf_id
+    store_path = get_store_path(user_id, pdf_id)
     thumb_path = store_path / "thumbnail.png"
     if thumb_path.exists():
         return thumb_path
 
-    meta = load_metadata(user_id, pdf_id)
-    source_path = meta.get("source_path")
-    if not source_path or not Path(source_path).exists():
+    if not recover_document_from_storage(user_id, pdf_id):
         return None
 
-    generate_thumbnail(Path(source_path), store_path)
     return thumb_path if thumb_path.exists() else None
 
 

@@ -366,7 +366,8 @@ async def chat(
     from core.ingest import (
     load_pdf_store,
     append_history,
-)
+    recover_document_from_storage,
+    )
     """
     Ask a question about a specific PDF.
     `session_id` lets the same conversation remember earlier turns —
@@ -379,7 +380,9 @@ async def chat(
             raise HTTPException(404, "Document not found")
         index, chunks, meta = load_pdf_store(current_user.id,req.pdf_id)
     except FileNotFoundError:
-        raise HTTPException(404, f"No document found with id: {req.pdf_id}")
+        if not recover_document_from_storage(current_user.id, req.pdf_id):
+            raise HTTPException(404, f"No document found with id: {req.pdf_id}")
+        index, chunks, meta = load_pdf_store(current_user.id,req.pdf_id)
 
     memory = get_or_create_memory(req.session_id)
 
@@ -467,7 +470,8 @@ async def summarize(
     from core.ingest import (
     load_pdf_store,
     append_history,
-)
+    recover_document_from_storage,
+    )
     """
     Summarize either an already-ingested PDF (pass pdf_id)
     or raw pasted text (pass text).
@@ -486,10 +490,12 @@ async def summarize(
         try:
             _, chunks, meta = load_pdf_store(current_user.id,req.pdf_id)
         except FileNotFoundError:
-            raise HTTPException(
-                404,
-                f"No document found with id: {req.pdf_id}"
-            )
+            if not recover_document_from_storage(current_user.id, req.pdf_id):
+                raise HTTPException(
+                    404,
+                    f"No document found with id: {req.pdf_id}"
+                )
+            _, chunks, meta = load_pdf_store(current_user.id,req.pdf_id)
 
         full_text = " ".join(c["text"] for c in chunks)
 
@@ -563,10 +569,27 @@ async def redact(
     if not doc:
         raise HTTPException(404, "Document not found")
 
-    original_path = Path(doc["source_path"])
+    original_path = Path(doc["source_path"]) if doc.get("source_path") else None
 
-    if not original_path.exists():
-        raise HTTPException(404, "Original PDF file not found on server.")
+    temp_redact_path = None
+
+    if not original_path or not original_path.exists():
+        storage_path = doc.get("storage_path")
+        if not storage_path:
+            raise HTTPException(404, "Storage path missing")
+
+        print(f"[Redact] source_path missing, downloading from Supabase Storage: {storage_path}")
+        try:
+            pdf_data = supabase.storage.from_("pdfs").download(storage_path)
+        except Exception as e:
+            raise HTTPException(404, f"PDF not found in storage: {e}")
+
+        pdf_name = doc.get("pdf_name", f"{req.pdf_id}.pdf")
+        temp_redact_path = OUTPUT_DIR / f"temp_redact_{uuid.uuid4().hex[:8]}_{pdf_name}"
+        with open(temp_redact_path, "wb") as f:
+            f.write(pdf_data)
+        original_path = temp_redact_path
+        print(f"[Redact] Saved temporary PDF: {original_path}")
 
     output_filename = f"redacted_{req.pdf_id}_{uuid.uuid4().hex[:8]}.pdf"
     output_path = OUTPUT_DIR / output_filename
@@ -580,6 +603,10 @@ async def redact(
         )
     except Exception as e:
         raise HTTPException(500, f"Redaction failed: {e}")
+    finally:
+        if temp_redact_path and temp_redact_path.exists():
+            os.remove(temp_redact_path)
+            print(f"[Redact] Cleaned up temporary PDF")
 
     download_url = f"/redact/download/{output_filename}"
 
