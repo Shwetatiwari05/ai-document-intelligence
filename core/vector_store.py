@@ -102,27 +102,27 @@ def get_reranker():
     if _reranker is None:
         print("Loading reranker...")
 
-        from sentence_transformers import CrossEncoder
+        # from sentence_transformers import CrossEncoder
 
-        _reranker = CrossEncoder(
-            "cross-encoder/ms-marco-MiniLM-L-6-v2"
-        )
+#         _reranker = CrossEncoder(
+#             "cross-encoder/ms-marco-MiniLM-L-6-v2"
+#         )
 
-    return _reranker
+#     return _reranker
 
-def rerank(query, results, top_k=3):
-    # Create pairs of query and chunk text for reranking
-    reranker = get_reranker()
-    pairs = [[query, result["text"]] for result in results]
+# def rerank(query, results, top_k=3):
+#     # Create pairs of query and chunk text for reranking
+#     reranker = get_reranker()
+#     pairs = [[query, result["text"]] for result in results]
     
-    # Get relevance scores from the reranker model
-    scores = reranker.predict(pairs)
+#     # Get relevance scores from the reranker model
+#     scores = reranker.predict(pairs)
     
-    # Add reranking scores to results
-    for i, result in enumerate(results):
-        result["rerank_score"] = float(scores[i])
+#     # Add reranking scores to results
+#     for i, result in enumerate(results):
+#         result["rerank_score"] = float(scores[i])
     
-    # Sort results by reranking score in descending order and return the top_k results
-    reranked = sorted(results, key=lambda x: x["rerank_score"], reverse=True)
+#     # Sort results by reranking score in descending order and return the top_k results
+#     reranked = sorted(results, key=lambda x: x["rerank_score"], reverse=True)
     
-    return reranked[:top_k]
+#     return reranked[:top_k]
