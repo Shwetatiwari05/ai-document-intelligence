@@ -179,6 +179,8 @@ async def upload_pdf(
     used_for: str = Form("chat"),
     current_user = Depends(get_current_user)
 ):
+    print("1. ENTERED UPLOAD API")
+    print(file.filename)
     from core.ingest import ingest_pdf
     """
     Upload a PDF — saves it, then ingests it into its own vector store.
@@ -188,6 +190,7 @@ async def upload_pdf(
     "used_for" records which page the upload came from (chat/summarize/
     redact) so the dashboard can show what this document was used for.
     """
+    print("2. Saving locally")
     
     if not file.filename.lower().endswith(".pdf"):
         raise HTTPException(400, "Only PDF files are supported.")
@@ -204,16 +207,27 @@ async def upload_pdf(
 
     with open(save_path, "wb") as f:
         shutil.copyfileobj(file.file, f)
+    print("3. Saved locally")
 
     storage_path = f"{current_user.id}/{uuid.uuid4().hex}_{file.filename}"
+    print("4. Uploading to Supabase")
 
-    with open(save_path, "rb") as f:
-        supabase.storage.from_("pdfs").upload(
-            storage_path,
-            f
-        )
-    print("UPLOAD START")
+    try:
+        with open(save_path, "rb") as f:
+            res = supabase.storage.from_("pdfs").upload(
+                storage_path,
+                f
+            )
 
+        print("SUPABASE RESPONSE =", res)
+        print("5. Uploaded to Supabase")
+
+    except Exception as e:
+        print("SUPABASE UPLOAD FAILED")
+        print(repr(e))
+        raise
+    print("6. Calling ingest")
+    print("7. INGEST START")
     try:
         metadata = ingest_pdf(
             str(save_path),
