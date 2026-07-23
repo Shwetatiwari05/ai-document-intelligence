@@ -123,8 +123,6 @@ def collect_sensitive_strings(text: str, redact_types: list, custom_terms: list)
                 line = line.strip()
                 if not line:
                     continue
-                if is_address_line(line):
-                    found.append(line)
                 for word in line.upper().split():
                     clean_word = re.sub(r'[^A-Za-z]', '', word)
                     if clean_word in ADDRESS_KEYWORDS:
