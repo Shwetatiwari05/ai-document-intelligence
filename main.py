@@ -26,40 +26,19 @@ from fastapi.responses import Response
 if TYPE_CHECKING:
     from core.rag_engine import ConversationMemory
 
-print("1")
 from fastapi import Depends
-
-print("2")
 from core.auth import get_current_user
-
-print("3")
 import os
-
-print("4")
+import re
 import shutil
-
-print("5")
 import uuid
-
-print("6")
 from datetime import datetime
-
-print("7")
 from pathlib import Path
-
-print("8")
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
-
-print("9")
 from fastapi.middleware.cors import CORSMiddleware
-
-print("10")
 from fastapi.responses import FileResponse, Response
-
-print("11")
 from pydantic import BaseModel
 
-print("12")
 
 # from fastapi import Depends
 # from core.auth import get_current_user
@@ -194,6 +173,18 @@ async def upload_pdf(
     
     if not file.filename.lower().endswith(".pdf"):
         raise HTTPException(400, "Only PDF files are supported.")
+    
+    # Sanitize filename for local storage and Supabase
+    filename = os.path.basename(file.filename)
+
+    filename = re.sub(r"\s+", "_", filename)
+
+    filename = re.sub(r"[^A-Za-z0-9._-]", "_", filename)
+
+    filename = re.sub(r"_+", "_", filename)
+
+    print("Original filename:", file.filename)
+    print("Sanitized filename:", filename)
 
     # Each upload gets its own subfolder (named with a random ID) so that
     # uploading two different files with the same name (e.g. "resume.pdf"
@@ -203,13 +194,13 @@ async def upload_pdf(
     
     unique_dir = UPLOAD_DIR / uuid.uuid4().hex
     unique_dir.mkdir(parents=True, exist_ok=True)
-    save_path = unique_dir / file.filename
+    save_path = unique_dir / filename
 
     with open(save_path, "wb") as f:
         shutil.copyfileobj(file.file, f)
     print("3. Saved locally")
 
-    storage_path = f"{current_user.id}/{uuid.uuid4().hex}_{file.filename}"
+    storage_path = f"{current_user.id}/{uuid.uuid4().hex}_{filename}"
     print("4. Uploading to Supabase")
 
     try:
