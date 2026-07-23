@@ -38,10 +38,14 @@
 
 #     return np.array(embeddings, dtype=np.float32)
 
-from sentence_transformers import SentenceTransformer
+import gc
 import numpy as np
+import torch
+from sentence_transformers import SentenceTransformer
+
 
 _model = None
+
 
 def get_model():
     global _model
@@ -49,8 +53,10 @@ def get_model():
     if _model is None:
         print("BEFORE MODEL LOAD")
 
+        torch.set_num_threads(1)
+
         _model = SentenceTransformer(
-            "sentence-transformers/all-MiniLM-L6-v2",
+            "sentence-transformers/paraphrase-MiniLM-L3-v2",
             device="cpu"
         )
 
@@ -58,7 +64,11 @@ def get_model():
 
     return _model
 
+
+
 def generate_embeddings(chunks):
+    print("CHUNKS RECEIVED =", len(chunks))
+
     model = get_model()
 
     texts = [
@@ -69,23 +79,47 @@ def generate_embeddings(chunks):
     print(f"Total chunks: {len(texts)}")
     print("Encoding starts...")
 
-    all_embeddings = []
+    embeddings = []
 
-    for i in range(0, len(texts), 16):   # 16 = aur kam RAM use hogi
-        print(f"Encoding batch {i//16 + 1}")
-        batch = texts[i:i + 16]
+    batch_size = 4
+
+    for i in range(0, len(texts), batch_size):
+
+        print(
+            f"Encoding batch {(i//batch_size)+1}/{(len(texts)-1)//batch_size+1}"
+        )
+
+        batch = texts[i:i+batch_size]
 
         emb = model.encode(
             batch,
             normalize_embeddings=True,
             show_progress_bar=False,
-            convert_to_numpy=True
+            convert_to_numpy=True,
+            batch_size=batch_size
         )
 
-        all_embeddings.extend(emb)
+        embeddings.append(emb)
+
+        del emb
+        gc.collect()
+
 
     print("Encoding finished!")
 
-    embeddings = np.array(all_embeddings, dtype=np.float32)
+    final_embeddings = np.vstack(
+        embeddings
+    ).astype(np.float32)
 
-    return embeddings
+
+    del embeddings
+    del texts
+
+    gc.collect()
+
+    print(
+        "Embedding shape:",
+        final_embeddings.shape
+    )
+
+    return final_embeddings
