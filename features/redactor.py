@@ -19,8 +19,6 @@ from dotenv import load_dotenv
 warnings.filterwarnings("ignore")
 load_dotenv()
 
-_GLINER_DISABLED = os.getenv("DISABLE_GLINER", "true").lower() == "true"
-
 # ── GLiNER (replaces spaCy for address/location detection) ───────────────────
 # pip install gliner
 # Model: urchade/gliner_medium-v2.1  (good balance speed/accuracy)
@@ -31,9 +29,6 @@ _gliner_model = None
 
 def get_gliner():
     global _gliner_model
-
-    if _GLINER_DISABLED:
-        return None
 
     if _gliner_model is None:
         print("Loading GLiNER...")

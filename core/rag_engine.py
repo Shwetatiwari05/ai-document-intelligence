@@ -3,6 +3,7 @@
 
 from groq import Groq
 from core.vector_store import search,rerank
+from core.embedder import generate_embeddings
 from dotenv import load_dotenv
 import os
 import re
@@ -52,12 +53,7 @@ def generate_answer(query: str, chunks: list, index, memory: ConversationMemory 
     query = re.sub(r'handcoded', 'hand coded', query)
     query = re.sub(r'\s+', ' ', query).strip()
 
-    results = search(
-    query,
-    index,
-    chunks,
-    top_k=50
-)
+    results = search(query, index, chunks, top_k=50)
 
     stopwords = {
     "what","is","are","the","a","an",

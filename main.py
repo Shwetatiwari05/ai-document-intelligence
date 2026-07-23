@@ -48,7 +48,7 @@ print("7")
 from pathlib import Path
 
 print("8")
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 
 print("9")
 from fastapi.middleware.cors import CORSMiddleware
@@ -174,7 +174,6 @@ class ClearMemoryRequest(BaseModel):
 
 @app.post("/upload")
 async def upload_pdf(
-    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     force_ocr: bool = Form(False),
     used_for: str = Form("chat"),
@@ -182,6 +181,7 @@ async def upload_pdf(
 ):
     print("1. ENTERED UPLOAD API")
     print(file.filename)
+    from core.ingest import ingest_pdf
     """
     Upload a PDF — saves it, then ingests it into its own vector store.
     Frontend should show a loading state while this runs (can take a while
@@ -228,36 +228,30 @@ async def upload_pdf(
         raise
     print("6. Calling ingest")
     print("7. INGEST START")
-    from core.ingest import get_pdf_id, ingest_pdf
+    try:
+        metadata = ingest_pdf(
+            str(save_path),
+            current_user.id,
+            force_ocr=force_ocr,
+            used_for=used_for,
+            storage_path=storage_path
+        )
+        print("INGEST COMPLETED")
 
-    pdf_id = get_pdf_id(str(save_path))
+        existing = get_document(metadata["pdf_id"], current_user.id)
+        print("EXISTING =", existing)
 
-    def _run_ingest():
-        try:
-            metadata = ingest_pdf(
-                str(save_path),
-                current_user.id,
-                force_ocr=force_ocr,
-                used_for=used_for,
-                storage_path=storage_path
-            )
-            print("INGEST COMPLETED")
+        if existing is None:
+            response = insert_document(metadata, current_user.id)
+            print("INSERT RESPONSE =", response)
 
-            existing = get_document(metadata["pdf_id"], current_user.id)
-            print("EXISTING =", existing)
-
-            if existing is None:
-                insert_resp = insert_document(metadata, current_user.id)
-                print("INSERT RESPONSE =", insert_resp)
-
-        except Exception as e:
-            print("DB ERROR =", repr(e))
-
-    background_tasks.add_task(_run_ingest)
+    except Exception as e:
+        print("DB ERROR =", repr(e))
+        raise
     
     return {
-        "status": "processing",
-        "pdf_id": pdf_id
+        "status": "success",
+        "document": metadata
     }
 
 

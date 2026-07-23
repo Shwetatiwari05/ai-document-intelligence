@@ -1,5 +1,4 @@
 import re
-import gc
 _nlp = None
 
 def get_nlp():
@@ -86,22 +85,9 @@ def clean_text(text):
 
 def chunk_text(text, chunk_size=500, overlap=80):
     nlp = get_nlp()
+    doc = nlp(text)
 
-    MAX_CHARS_PER_DOC = 50000
-
-    if len(text) > MAX_CHARS_PER_DOC:
-        sentences = []
-        for i in range(0, len(text), MAX_CHARS_PER_DOC):
-            segment = text[i:i + MAX_CHARS_PER_DOC + overlap]
-            doc = nlp(segment)
-            sentences.extend([sent.text.strip() for sent in doc.sents])
-        del doc
-    else:
-        doc = nlp(text)
-        sentences = [sent.text.strip() for sent in doc.sents]
-        del doc
-
-    gc.collect()
+    sentences = [sent.text.strip() for sent in doc.sents]  # Split text into sentences using spaCy's sentence segmentation
     chunks = []
     current_chunk = []
     current_length = 0
