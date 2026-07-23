@@ -209,7 +209,7 @@ def ingest_pdf(
     raw_text = extract_text_smart(str(pdf_path), force_ocr=force_ocr)
 
     print("AFTER EXTRACTION")
-    print("TEXT LENGTH:", len(text))
+    print("TEXT LENGTH:", len(raw_text))
 
     # ── Step 2: Clean ─────────────────────────────────────────────
     print("Step 2/5: Cleaning text...")
