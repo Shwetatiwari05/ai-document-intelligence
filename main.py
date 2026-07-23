@@ -212,6 +212,7 @@ async def upload_pdf(
             storage_path,
             f
         )
+    print("UPLOAD START")
 
     try:
         metadata = ingest_pdf(
@@ -221,6 +222,7 @@ async def upload_pdf(
             used_for=used_for,
             storage_path=storage_path
         )
+        print("INGEST COMPLETED")
 
         existing = get_document(metadata["pdf_id"], current_user.id)
         print("EXISTING =", existing)

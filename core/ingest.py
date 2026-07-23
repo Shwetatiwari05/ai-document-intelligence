@@ -162,6 +162,7 @@ def ingest_pdf(
     used_for: str = "chat",
     storage_path: str | None = None,
 ) -> dict:
+    print("INGEST START")
     """
     Ingest a PDF into its own isolated vector store under the given user.
 
@@ -199,11 +200,16 @@ def ingest_pdf(
 
     generate_thumbnail(pdf_path, store_path)
 
+    print("BEFORE EXTRACTION")
+
     # ── Step 1: Extract ───────────────────────────────────────────
     print(f"\nIngesting: {pdf_path.name}")
     print("─" * 50)
     print("Step 1/5: Extracting text...")
     raw_text = extract_text_smart(str(pdf_path), force_ocr=force_ocr)
+
+    print("AFTER EXTRACTION")
+    print("TEXT LENGTH:", len(text))
 
     # ── Step 2: Clean ─────────────────────────────────────────────
     print("Step 2/5: Cleaning text...")
