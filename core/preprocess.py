@@ -1,6 +1,16 @@
-import spacy
-nlp = spacy.load("en_core_web_sm") # Loading spaCy for English NLP model
 import re
+_nlp = None
+
+def get_nlp():
+    global _nlp
+
+    if _nlp is None:
+        import spacy
+        print("LOADING SPACY MODEL")
+        _nlp = spacy.load("en_core_web_sm")
+        print("SPACY MODEL LOADED")
+
+    return _nlp
 
 # removes noisy/useless chunks 
 def is_low_quality_chunk(text):
@@ -73,8 +83,10 @@ def clean_text(text):
 
     return text.strip()
 
-def chunk_text(text, chunk_size=500, overlap=80):  
-    doc = nlp(text)      
+def chunk_text(text, chunk_size=500, overlap=80):
+    nlp = get_nlp()
+    doc = nlp(text)
+
     sentences = [sent.text.strip() for sent in doc.sents]  # Split text into sentences using spaCy's sentence segmentation
     chunks = []
     current_chunk = []

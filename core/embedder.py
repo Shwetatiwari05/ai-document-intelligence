@@ -38,17 +38,16 @@
 
 #     return np.array(embeddings, dtype=np.float32)
 import gc
-from sentence_transformers import SentenceTransformer
 import numpy as np
 
 _model = None
 
 
 def get_model():
-
     global _model
 
     if _model is None:
+        from sentence_transformers import SentenceTransformer
 
         print("LOADING EMBEDDING MODEL")
 
