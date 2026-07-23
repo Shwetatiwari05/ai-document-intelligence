@@ -102,7 +102,6 @@ from core.db import (
     get_documents,
     delete_document_db,
     get_document,
-    update_document_used_for,
 )
 
 
@@ -428,8 +427,6 @@ async def chat(
         }
     )
 
-    update_document_used_for(current_user.id, req.pdf_id, "chat")
-
     return ChatResponse(answer=answer, sources=sources)
 
 
@@ -529,7 +526,6 @@ async def summarize(
                 "at": datetime.now().strftime("%Y-%m-%d %H:%M"),
             },
         )
-        update_document_used_for(current_user.id, req.pdf_id, "summarize")
 
     return {
         "pdf_id": req.pdf_id,
@@ -625,8 +621,6 @@ async def redact(
             "at": datetime.now().strftime("%Y-%m-%d %H:%M"),
         },
     )
-
-    update_document_used_for(current_user.id, req.pdf_id, "redact")
 
     return {
         "status": "success",
