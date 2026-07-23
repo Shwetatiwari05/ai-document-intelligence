@@ -232,12 +232,21 @@ def ingest_pdf(
 
     # ── Step 4: Embed ─────────────────────────────────────────────
     print("Step 4/5: Generating embeddings...")
-    print("DEBUG BEFORE EMBEDDING")
-    return {
-    "pdf_id": pdf_id,
-    "store_path": str(store_path),
-    "debug": "stopped before embedding"
-}
+
+    import gc
+
+    try:
+        embeddings = generate_embeddings(chunks)
+
+        print(
+            "Embedding shape:",
+            embeddings.shape
+        )
+
+    except Exception as e:
+        print("EMBEDDING ERROR:", repr(e))
+        gc.collect()
+        raise
 
     # ── Step 5: Save vector store ─────────────────────────────────
     print("Step 5/5: Building & saving vector store...")

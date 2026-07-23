@@ -37,79 +37,89 @@
 #     embeddings = np.array(all_embeddings, dtype=np.float32)
 
 #     return np.array(embeddings, dtype=np.float32)
-
 import gc
-import numpy as np
-import torch
 from sentence_transformers import SentenceTransformer
-
+import numpy as np
 
 _model = None
 
 
 def get_model():
+
     global _model
 
     if _model is None:
-        print("BEFORE MODEL LOAD")
 
-        torch.set_num_threads(1)
+        print("LOADING EMBEDDING MODEL")
 
         _model = SentenceTransformer(
             "sentence-transformers/paraphrase-MiniLM-L3-v2",
             device="cpu"
         )
 
-        print("AFTER MODEL LOAD")
+        print("MODEL LOADED")
 
     return _model
 
 
 
 def generate_embeddings(chunks):
-    print("CHUNKS RECEIVED =", len(chunks))
 
     model = get_model()
 
+
     texts = [
-        "passage: " + chunk["text"]
-        for chunk in chunks
+        "passage: " + c["text"]
+        for c in chunks
     ]
 
-    print(f"Total chunks: {len(texts)}")
-    print("Encoding starts...")
+
+    print("TOTAL TEXTS:", len(texts))
+
 
     embeddings = []
 
-    batch_size = 4
 
-    for i in range(0, len(texts), batch_size):
+    for start in range(0, len(texts), 8):
+
+        end = min(start + 8, len(texts))
 
         print(
-            f"Encoding batch {(i//batch_size)+1}/{(len(texts)-1)//batch_size+1}"
+            f"Embedding batch {start}-{end}"
         )
 
-        batch = texts[i:i+batch_size]
+
+        batch = texts[start:end]
+
 
         emb = model.encode(
             batch,
-            normalize_embeddings=True,
+            batch_size=8,
             show_progress_bar=False,
-            convert_to_numpy=True,
-            batch_size=batch_size
+            normalize_embeddings=True,
+            convert_to_numpy=True
         )
+
 
         embeddings.append(emb)
 
+
+        del batch
         del emb
+
         gc.collect()
 
 
-    print("Encoding finished!")
 
-    final_embeddings = np.vstack(
-        embeddings
-    ).astype(np.float32)
+    print("STACKING EMBEDDINGS")
+
+
+    result = np.vstack(embeddings)
+
+    result = result.astype(
+        np.float32,
+        copy=False
+    )
 
 
     del embeddings
@@ -117,9 +127,11 @@ def generate_embeddings(chunks):
 
     gc.collect()
 
+
     print(
-        "Embedding shape:",
-        final_embeddings.shape
+        "FINAL EMBEDDING:",
+        result.shape
     )
 
-    return final_embeddings
+
+    return result
