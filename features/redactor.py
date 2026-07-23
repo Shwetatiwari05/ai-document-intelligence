@@ -127,7 +127,6 @@ def collect_sensitive_strings(text: str, redact_types: list, custom_terms: list)
                     clean_word = re.sub(r'[^A-Za-z]', '', word)
                     if clean_word in ADDRESS_KEYWORDS:
                         found.append(clean_word)
-                        break
 
     for term in (custom_terms or []):
         if term.strip():
@@ -252,6 +251,18 @@ def redact_text_page(page: fitz.Page, page_num: int,
         phrase = phrase.strip()
         if not phrase:
             continue
+
+        # For address keywords, always use word-list matching instead of search_for()
+        if phrase.upper() in ADDRESS_KEYWORDS:
+            p = clean(phrase)
+            for w in words:
+                if clean(w[4]) == p:
+                    rect = fitz.Rect(w[0]-1, w[1]-1, w[2]+1, w[3]+1)
+                    page.add_redact_annot(rect, fill=(0, 0, 0))
+                    audit_log.append({"page": page_num+1, "type": "text", "text": phrase})
+                    print(f"  ✓ [addr] {phrase[:60]}")
+            continue
+
         # search_for on very short strings (<=3 chars) causes false positives
         # e.g. "AZ", "VIC" matching inside other words like "Service"
         # For short strings, use whole-word match via word list instead
