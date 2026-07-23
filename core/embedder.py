@@ -47,16 +47,6 @@ def get_model():
     global _model
 
     if _model is None:
-        print("Loading embedding model...")
-        _model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
-        print("Embedding model loaded!")
-
-    return _model
-
-def get_model():
-    global _model
-
-    if _model is None:
         print("BEFORE MODEL LOAD")
 
         _model = SentenceTransformer(

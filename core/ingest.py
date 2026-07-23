@@ -160,7 +160,7 @@ def ingest_pdf(
     user_id: str,
     force_ocr: bool = False,
     used_for: str = "chat",
-    storage_path: str = None
+    storage_path: str | None = None,
 ) -> dict:
     """
     Ingest a PDF into its own isolated vector store under the given user.
