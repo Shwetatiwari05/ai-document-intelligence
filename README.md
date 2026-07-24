@@ -1,4 +1,3 @@
-<img width="1316" height="753" alt="Screenshot 2026-07-24 at 2 14 03 PM" src="https://github.com/user-attachments/assets/e67f7281-27bd-48e8-a806-014f17eac2c4" />
 # 🚀 AskPDF
 
 ### RAG-Based Multimodal AI Document Intelligence System
