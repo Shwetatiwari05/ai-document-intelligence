@@ -391,6 +391,9 @@ The retrieved context is passed to Groq LLM to generate a context-aware answer.
 
 > * AI Summary
 
+<img width="1470" height="841" alt="Screenshot 2026-07-24 at 6 24 20 PM" src="https://github.com/user-attachments/assets/b3d6edb8-6506-49a7-b272-6b3c1542ef5f" />
+<img width="1470" height="830" alt="Screenshot 2026-07-24 at 6 25 36 PM" src="https://github.com/user-attachments/assets/94889485-1e99-40ff-a9db-3ebcf491b940" />
+
 
 > * AI Redaction
 <img width="1470" height="827" alt="Screenshot 2026-07-23 at 11 09 22 PM" src="https://github.com/user-attachments/assets/a412bfa0-c7fb-4749-9efa-90726441c393" />
