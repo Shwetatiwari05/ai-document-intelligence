@@ -195,6 +195,7 @@ from core.db import (
     append_history,
     load_history,
     clear_history,
+    delete_history,
 )
 
 
