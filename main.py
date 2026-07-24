@@ -81,6 +81,7 @@ from core.db import (
     get_documents,
     delete_document_db,
     get_document,
+    delete_history
 )
 
 
@@ -273,7 +274,12 @@ async def delete_document(
 ):
     from core.ingest import delete_pdf_store
 
-    delete_pdf_store(current_user.id,pdf_id)
+    delete_pdf_store(current_user.id, pdf_id)
+
+    delete_history(
+        pdf_id,
+        current_user.id
+    )
 
     delete_document_db(
         pdf_id,
